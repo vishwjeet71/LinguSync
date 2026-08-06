@@ -100,5 +100,71 @@ const premiumProducts = products.filter((product) => product.price >= 2000);
 const premiumAndInstock =  products.filter((product) => product.price >= 2000 && product.inStock);
 
 for (const product of premiumAndInstock) {
-    console.log(product.name)
+    console.log(product.name);
 }
+
+// find
+const employees = [
+    { id: 101, name: "Amit", department: "HR", salary: 40000 },
+    { id: 102, name: "Neha", department: "IT", salary: 65000 },
+    { id: 103, name: "Rohan", department: "Finance", salary: 55000 },
+    { id: 104, name: "Priya", department: "IT", salary: 70000 }
+];
+
+console.log(employees.find((e) => e.id === 103));
+console.log(employees.find((e) => e.salary > 60000));
+console.log(employees.find((e) => e.id === 999));
+
+// some
+const orders = [
+    { id: 1, delivered: true, amount: 1200 },
+    { id: 2, delivered: true, amount: 800 },
+    { id: 3, delivered: false, amount: 2500 },
+    { id: 4, delivered: true, amount: 600 }
+];
+
+console.log(orders.some((order) => !order.delivered)); 
+console.log(orders.some((order) => order.amount > 2000));
+console.log(orders.some((order) => order.amount > 5000));
+
+// every
+const users = [
+    { name: "Amit", active: true, salary: 45000 },
+    { name: "Neha", active: true, salary: 62000 },
+    { name: "Rohan", active: false, salary: 55000 },
+    { name: "Priya", active: true, salary: 70000 }
+];
+
+console.log(users.every((user) => user.active));
+console.log(users.every((user) => user.salary >= 40000));
+console.log(users.every((user) => user.salary >= 60000));
+
+// forEach
+const tasks = [
+    { title: "Learn JavaScript", completed: true },
+    { title: "Build React App", completed: false },
+    { title: "Learn Tauri", completed: false }
+];
+
+tasks.forEach((task) => {
+    console.log(
+        `${task.completed ? "✓" : "✗"} ${task.title}`
+    );
+});
+
+// reduce
+const expenses = [1200, 800, 500, 1500, 700];
+
+const totalExpense = expenses.reduce((total, current) => total + current);
+console.log(totalExpense)
+
+const cart = [
+    { name: "Laptop", price: 65000, quantity: 1 },
+    { name: "Mouse", price: 700, quantity: 2 },
+    { name: "Keyboard", price: 2500, quantity: 1 }
+];
+
+const finalPrize = cart.reduce((prize, item) => {
+    return prize + item.price * item.quantity
+}, 0)
+console.log(finalPrize)
