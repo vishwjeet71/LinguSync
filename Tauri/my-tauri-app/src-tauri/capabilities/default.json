@@ -1,0 +1,56 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capability for the main window",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "opener:default",
+    "dialog:default",
+    "fs:default",
+    "fs:allow-appconfig-write",
+    "fs:allow-appconfig-read-recursive",
+    "shell:default",
+    "shell:allow-kill",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "name": "run-echo",
+          "cmd": "echo",
+          "sidecar": false,
+          "args": true
+        }
+      ]
+    },
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        {
+          "name": "sleep",
+          "cmd": "sleep",
+          "sidecar": false,
+          "args": true
+        },
+        {
+          "name": "python",
+          "cmd": "python",
+          "sidecar": false,
+          "args": true
+        }
+      ]
+    },
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        {
+          "name": "binaries/backend",
+          "sidecar": true,
+          "args": true
+        }
+      ]
+    }
+  ]
+}
