@@ -3,8 +3,9 @@ javaScript.txt
 projectRequirements
 react.txt
 
-inference_engine/.venv
+# project documentation
+synopsis/
+applicationDesign/*
 
-# model
-inference_engine/qwen-3b-raw/model-00001-of-00002.safetensors
-inference_engine/qwen-3b-raw/model-00002-of-00002.safetensors
+# Ref video
+RefVideo/
