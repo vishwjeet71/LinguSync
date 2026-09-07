@@ -1,0 +1,37 @@
+components and JSX -> DONE
+props -> DONE
+state / useState -> DONE
+state updates and functional updates -> DONE
+forms / controlled inputs -> DONE
+events -> DONE
+
+conditional rendering -> DONE
+lists and key -> DONE
+useEffect -> DONE
+dependency arrays -> DONE
+localStorage persistence -> DONE
+React Router -> DONE
+
+BrowserRouter -> DONE
+Routes -> DONE
+Route -> DONE
+Link -> DONE
+useNavigate -> DONE
+dynamic routes
+
+useParams -> DONE
+state ownership -> DONE
+lifting state up -> DONE
+Context API -> DONE
+useContext -> DONE
+derived state -> DONE
+
+useMemo -> DONE
+React.memo + useCallback -> DONE
+useRef -> DONE
+Custom Hooks -> DONE
+Error handling / boundaries -> DONE
+
+Data fetching + loading/error states -> DONE
+Composition + children -> DONE
+Project Structure -> DONE

@@ -1,0 +1,17 @@
+let and const -> DONE
+Functions -> DONE
+Arrow Functions -> DONE
+Objects -> DONE
+Arrays -> DONE
+
+Array Methods [map(), filter(), find(), forEach(), some(), every(), reduce()] -> DONE
+Destructuring -> DONE
+Spread & Rest -> DONE
+Template Literals -> DONE
+
+ES Modules -> DONE
+Promises -> DONE
+Async / Await -> DONE
+Fetch API -> DONE
+Optional Chaining (?.) -> DONE
+Nullish Coalescing (??) -> DONE

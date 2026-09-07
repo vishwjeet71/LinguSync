@@ -4,10 +4,5 @@ React/developer-workspace/.gitignore
 
 Tauri/my-tauri-app/build
 
-hf
-javaScript.txt
-projectRequirements
-react.txt
-
 Tauri/my-tauri-app/build/
 Tauri/my-tauri-app/backend/env/
