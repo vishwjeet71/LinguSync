@@ -1,11 +1,9 @@
-hf
-javaScript.txt
-projectRequirements
-react.txt
-
 # project documentation
 synopsis/
 applicationDesign/*
 
 # Ref video
 RefVideo/
+
+# inference engine
+.ipynb_checkpoints/
