@@ -7,3 +7,4 @@ RefVideo/
 
 # inference engine
 .ipynb_checkpoints/
+inference_engine/models/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf
