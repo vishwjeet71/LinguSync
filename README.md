@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="src-tauri/icons/Square142x142Logo.png" alt="LinguSync Logo" width="120">
+</p>
+
 ## LinguSync
 
 LinguSync is a local desktop application designed to simplify the process of converting the spoken language of a video into another language. It is a local-first application where all processes, such as speech recognition, language translation, speech generation, etc., happen on the user's local hardware.
