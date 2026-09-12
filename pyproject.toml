@@ -6,8 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi[standard]>=0.141.1",
-    "huggingface-hub>=1.30.0",
-    "jupyterlab>=4.6.3",
-    "llama-cpp-python>=0.3.35",
-    "numpy>=2.4.6",
+    "pandas>=3.0.5",
+    "platformdirs>=4.11.8",
+    "sqlalchemy>=2.0.52",
 ]
