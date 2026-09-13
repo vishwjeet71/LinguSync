@@ -78,6 +78,7 @@ export default function Projects() {
                     {projectsData.map((p) => (
                         <ProjectCart
                             key={p.project_id}
+                            id={p.project_id}
                             projectName={p.project_name}
                             created_at={p.created_at}
                         />
