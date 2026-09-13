@@ -4,7 +4,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, Session, sess
 from sqlalchemy.engine import Engine
 
 # Data librarys
-import pandas as pd, json, os
+import pandas as pd, json
 
 # Directorie librarys
 from platformdirs import PlatformDirs
@@ -37,6 +37,7 @@ class Projects(Base):
 
     project_id: Mapped[int] = mapped_column(primary_key=True)
     project_name: Mapped[str] = mapped_column(String(100), unique=True)
+    created_at: Mapped[str] = mapped_column(String(20), unique=True)
     input_video: Mapped[str] = mapped_column(String(100), nullable=True)
     stt_output: Mapped[str] = mapped_column(String(100), nullable=True)
     trans_output: Mapped[str] = mapped_column(String(100), nullable=True)
@@ -118,6 +119,8 @@ def add_sql_data(
             else:
                 try:
                     new_data = Projects(
+                        project_name= data.get("project_name", None),
+                        created_at= data.get("created_at", "No data"),
                         input_video=data.get("input_video", None),
                         stt_output=data.get("stt_output", None),
                         trans_output=data.get("trans_output", None),
@@ -191,5 +194,5 @@ def load_data_from_sql(sql_engine: Engine = sql_engine, response: Response = Non
         logging.error("Unable to load data:", e)
         return {
             "CM": f"Unable to load data: {e}",
-            "UM": tables,
+            "UM": "Unable to load Data!",
         }
