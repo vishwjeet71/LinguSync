@@ -74,13 +74,16 @@ export default function Projects() {
                     />
                 </div>
 
-                {projectsData.map((p) => (
-                    <ProjectCart
-                        key={p.project_id}
-                        projectName={p.project_name}
-                        created_at={p.created_at}
-                    />
-                ))}
+                <div>
+                    {projectsData.map((p) => (
+                        <ProjectCart
+                            key={p.project_id}
+                            projectName={p.project_name}
+                            created_at={p.created_at}
+                        />
+                    ))}
+                </div>
+
             </div>
         );
     }
@@ -88,23 +91,28 @@ export default function Projects() {
     if (projectsData && projectsData.length === 0) {
 
         return (
-            <>
-                <h3>You have no Projects!</h3>
-                <p>Create A project</p>
+            <div>
+                <div>
+                    <h3>You have no Projects!</h3>
+                    <p>Create A project</p>
+                </div>
 
-                <button onClick={() => setIsOpen(true)}>
-                    + Add Project
-                </button>
+                <div>
+                    <button onClick={() => setIsOpen(true)}>
+                        + Add Project
+                    </button>
 
-                <ProjectAddingWindow // should pop up a box for entring project name and save it
-                    isOpen={isOpen}
-                    setIsOpen={setIsOpen}
-                    projectName={projectName}
-                    setProjectName={setProjectName}
-                    portNumber={portNumber}
-                    setDisplayMessage={setDisplayMessage}
-                />
-            </>
+                    <ProjectAddingWindow // should pop up a box for entring project name and save it
+                        isOpen={isOpen}
+                        setIsOpen={setIsOpen}
+                        projectName={projectName}
+                        setProjectName={setProjectName}
+                        portNumber={portNumber}
+                        setDisplayMessage={setDisplayMessage}
+                    />
+                </div>
+
+            </div>
         );
 
     }
