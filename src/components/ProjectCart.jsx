@@ -6,6 +6,8 @@ export default function ProjectCart({
     created_at
 }) {
 
+    const navigate = useNavigate();
+
     return (
         <>
             <div>
