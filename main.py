@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 
 # Input Data validation & other
@@ -32,6 +32,10 @@ class SaveProject(BaseModel):
     project_name: str
 
 
+class ProjectId(BaseModel):
+    project_id: int
+
+
 @app.get("/lingusync")
 async def get_health():
     return {"status": "ok"}
@@ -43,22 +47,48 @@ async def get_paths():
 
 
 @app.get("/load_data")
-async def get_data():
-    return load_data_from_sql()
+async def get_data(response: Response):
+
+    try:
+        return load_data_from_sql(response=response)
+
+    except Exception as e:
+        response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        return {"CM": f"Unable to load data: {e}", "UM": "Unable to load Data!"}
 
 
 @app.post("/save_project")
-async def save_project(body: SaveProject):
+async def save_project(body: SaveProject, response: Response):
+
     now = datetime.now()
-    return add_sql_data(
-        table_name="projects",
-        data={
-            "project_name": body.project_name,
-            "created_at": now.strftime("On %Y-%m-%d at %H:%M"),
-        },
-    )
+
+    try:
+        return add_sql_data(
+            table_name="projects",
+            data={
+                "project_name": body.project_name,
+                "created_at": now.strftime("On %Y-%m-%d at %H:%M"),
+            },
+            response=response
+        )
+
+    except Exception as e:
+        response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        return {
+            "CM": f"Operation failed: {e}",
+            "UM": "Something went wrong. Please try again later.",
+        }
 
 
 @app.post("/get/projects")
-async def get_project_by_id(id: int):
-    return fetch_record(row_id=id)
+async def get_project_by_id(body: ProjectId, response: Response):
+
+    try:
+        return fetch_record(row_id=body.project_id, response=response)
+
+    except Exception as e:
+        response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        return {
+            "CM": f"Failed to load data for id: {body.project_id}: {e}",
+            "UM": "Failed to load data.",
+        }

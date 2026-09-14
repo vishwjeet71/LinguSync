@@ -72,8 +72,7 @@ def add_sql_data(
     response: Response = None,
 ):
     if response is None:
-        logging.warning("Response Object not provided!")
-        response = Response()
+        raise Exception("Response Object not provided!")
 
     # makeing Session
     Session = sessionmaker(bind=sql_engine)
@@ -171,8 +170,7 @@ def add_sql_data(
 def load_data_from_sql(sql_engine: Engine = sql_engine, response: Response = None):
 
     if response is None:
-        logging.warning("Response Object not provided!")
-        response = Response()
+        raise Exception("Response Object not provided!")
 
     tables = {"projects": None, "models": None}
 
@@ -190,7 +188,7 @@ def load_data_from_sql(sql_engine: Engine = sql_engine, response: Response = Non
         }
 
     except Exception as e:
-        response.status_code
+        response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
         logging.error("Unable to load data:", e)
         return {
             "CM": f"Unable to load data: {e}",
@@ -199,16 +197,15 @@ def load_data_from_sql(sql_engine: Engine = sql_engine, response: Response = Non
 
 
 def fetch_record(
-    ql_engine: Engine = sql_engine, response: Response = None, row_id: int = None
+    sql_engine: Engine = sql_engine, response: Response = None, row_id: int = None
 ):
     if response is None:
-        logging.warning("Response Object not provided!")
-        response = Response()
-
-    Session = sessionmaker(bind=sql_engine)
-    session = Session()
+        raise Exception("Response Object not provided!")
 
     try:
+
+        Session = sessionmaker(bind=sql_engine)
+        session = Session()
 
         row = session.query(Projects).filter(Projects.project_id == row_id).first()
 
