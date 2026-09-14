@@ -11,6 +11,7 @@ from backend.appDataBase.ApplicationSql import (
     sql_path,
     load_data_from_sql,
     add_sql_data,
+    fetch_record,
 )
 
 app = FastAPI(
@@ -36,7 +37,7 @@ async def get_health():
     return {"status": "ok"}
 
 
-@app.get("/system-paths")
+@app.get("/system/paths")
 async def get_paths():
     return {"app_data_path": app_data_path, "sql_path": sql_path}
 
@@ -56,3 +57,8 @@ async def save_project(body: SaveProject):
             "created_at": now.strftime("On %Y-%m-%d at %H:%M"),
         },
     )
+
+
+@app.post("/get/projects")
+async def get_project_by_id(id: int):
+    return fetch_record(row_id=id)

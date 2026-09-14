@@ -119,8 +119,8 @@ def add_sql_data(
             else:
                 try:
                     new_data = Projects(
-                        project_name= data.get("project_name", None),
-                        created_at= data.get("created_at", "No data"),
+                        project_name=data.get("project_name", None),
+                        created_at=data.get("created_at", "No data"),
                         input_video=data.get("input_video", None),
                         stt_output=data.get("stt_output", None),
                         trans_output=data.get("trans_output", None),
@@ -195,4 +195,41 @@ def load_data_from_sql(sql_engine: Engine = sql_engine, response: Response = Non
         return {
             "CM": f"Unable to load data: {e}",
             "UM": "Unable to load Data!",
+        }
+
+
+def fetch_record(
+    ql_engine: Engine = sql_engine, response: Response = None, row_id: int = None
+):
+    if response is None:
+        logging.warning("Response Object not provided!")
+        response = Response()
+
+    Session = sessionmaker(bind=sql_engine)
+    session = Session()
+
+    try:
+
+        row = session.query(Projects).filter(Projects.project_id == row_id).first()
+
+        if row:
+            data = {
+                column.name: getattr(row, column.name)
+                for column in Projects.__table__.columns
+            }
+
+            json.dumps(data, default=str)
+
+            return {"CM": f"Data loaded successfully for id: {row_id}", "UM": data}
+
+        else:
+            response.status_code = status.HTTP_404_NOT_FOUND
+            return {"CM": f"No data found for id: {row_id}", "UM": "No data found."}
+
+    except Exception as e:
+        response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+
+        return {
+            "CM": f"Failed to load data for id: {row_id}: {e}",
+            "UM": "Failed to load data.",
         }
