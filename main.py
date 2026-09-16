@@ -80,7 +80,7 @@ async def save_project(body: SaveProject, response: Response):
         }
 
 
-@app.post("/get/projects")
+@app.post("/get/project")
 async def get_project_by_id(body: ProjectId, response: Response):
 
     try:
