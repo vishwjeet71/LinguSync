@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 # Input Data validation & other
 from pydantic import BaseModel
 from datetime import datetime
+from typing import Optional
 
 # Data base
 from backend.appDataBase.ApplicationSql import (
@@ -34,6 +35,11 @@ class SaveProject(BaseModel):
 
 class ProjectId(BaseModel):
     project_id: int
+
+
+class ProjectUpdate(BaseModel):
+    project_id: int
+    input_video: str
 
 
 @app.get("/lingusync")
@@ -69,7 +75,7 @@ async def save_project(body: SaveProject, response: Response):
                 "project_name": body.project_name,
                 "created_at": now.strftime("On %Y-%m-%d at %H:%M"),
             },
-            response=response
+            response=response,
         )
 
     except Exception as e:
@@ -91,4 +97,24 @@ async def get_project_by_id(body: ProjectId, response: Response):
         return {
             "CM": f"Failed to load data for id: {body.project_id}: {e}",
             "UM": "Failed to load data.",
+        }
+
+
+@app.post("/project/update")
+async def update_project(body: ProjectUpdate, response: Response):
+
+    try:
+        return add_sql_data(
+            table_name="projects",
+            update=True,
+            row_id=body.project_id,
+            data={"input_video": body.input_video},
+            response=response,
+        )
+
+    except Exception as e:
+        response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        return {
+            "CM": f"Failed to update project: {body.project_id}",
+            "UM": "Unable to update your details.",
         }
