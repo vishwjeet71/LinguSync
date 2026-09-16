@@ -4,6 +4,9 @@ import { useState, useEffect } from "react";
 // Project Context
 import { useProjectContext } from "../App";
 
+// Component
+import SelectInput from "../components/SelectInput";
+
 export default function Project() {
 
     const { id } = useParams();
@@ -77,6 +80,7 @@ export default function Project() {
             </div>
 
             <div>
+                <SelectInput Input_file={projectData.input_video} />
             </div>
         </div>
     );
