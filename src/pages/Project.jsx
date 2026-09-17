@@ -80,7 +80,11 @@ export default function Project() {
             </div>
 
             <div>
-                <SelectInput Input_file={projectData.input_video} />
+                <SelectInput
+                    portNumber={portNumber}
+                    project_id={id}
+                    Input_file={projectData.input_video}
+                    setDisplayMessage={setDisplayMessage} />
             </div>
         </div>
     );
