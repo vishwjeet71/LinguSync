@@ -1,6 +1,6 @@
 import { open } from "@tauri-apps/plugin-dialog";
 
-export default function SelectInput({ portNumber, project_id, Input_file, setDisplayMessage }) {
+export default function SelectInput({ portNumber, project_id, Input_file, setDisplayMessage, setRefTrigger }) {
 
     const handleSelectFile = async () => {
 
@@ -21,7 +21,7 @@ export default function SelectInput({ portNumber, project_id, Input_file, setDis
                 console.log("User cancelled the file selection");
             } else {
 
-                await makeUpdateRequest({ portNumber, project_id, filePath, setDisplayMessage });
+                await makeUpdateRequest({ portNumber, project_id, filePath, setDisplayMessage, setRefTrigger });
             }
 
         } catch (err) {
@@ -41,7 +41,7 @@ export default function SelectInput({ portNumber, project_id, Input_file, setDis
     );
 }
 
-const makeUpdateRequest = async ({ portNumber, project_id, filePath, setDisplayMessage }) => {
+const makeUpdateRequest = async ({ portNumber, project_id, filePath, setDisplayMessage, setRefTrigger }) => {
 
     try {
 
@@ -62,7 +62,7 @@ const makeUpdateRequest = async ({ portNumber, project_id, filePath, setDisplayM
 
             console.log(response_data.CM);
             setDisplayMessage(response_data.UM);
-            window.location.reload();
+            setRefTrigger(p => p + 1);
 
         } else {
 

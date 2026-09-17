@@ -13,6 +13,7 @@ export default function Project() {
     const { portNumber, setDisplayMessage } = useProjectContext();
     const [projectData, setProjectData] = useState("");
     const navigate = useNavigate();
+    const [refTrigger, setRefTrigger] = useState(0);
 
     useEffect(() => {
         const make_project_request = async () => {
@@ -51,7 +52,7 @@ export default function Project() {
         }
 
         make_project_request();
-    }, []);
+    }, [refTrigger]);
 
     if (projectData === "") {
         return (
@@ -84,7 +85,8 @@ export default function Project() {
                     portNumber={portNumber}
                     project_id={id}
                     Input_file={projectData.input_video}
-                    setDisplayMessage={setDisplayMessage} />
+                    setDisplayMessage={setDisplayMessage}
+                    setRefTrigger={setRefTrigger} />
             </div>
         </div>
     );
