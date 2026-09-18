@@ -1,6 +1,12 @@
 import { open } from "@tauri-apps/plugin-dialog";
+import { useEffect, useState } from "react";
 
-export default function SelectInput({ portNumber, project_id, Input_file, setDisplayMessage, setRefTrigger }) {
+export default function SelectInput({ portNumber, project_id, Input_file, setDisplayMessage, setRefTrigger, setIsUpdate }) {
+
+    const [updateProcessMenager, setUpdateProcessMenager] = useState("default");
+    const [warrMessage, setWarrMessage] = useState(false);
+    const [userResponse, setUserResponse] = useState(false);
+
 
     const handleSelectFile = async () => {
 
@@ -29,12 +35,49 @@ export default function SelectInput({ portNumber, project_id, Input_file, setDis
         }
     }
 
+    useEffect(() => {
+
+        if (updateProcessMenager === "default") {
+            return;
+        }
+
+        if (updateProcessMenager === "wantUpdate" && Input_file) {
+
+            setWarrMessage(true);
+
+        } else {
+
+            handleSelectFile();
+            setUpdateProcessMenager("default");
+        }
+
+    }, [updateProcessMenager])
 
     return (
         <div>
+            {warrMessage && (
+                <div>
+                    <h3>Changing the input file will restart the project.</h3>
+                    <p>Create a new project if you want to keep this project unchanged.</p>
+
+                    <div>
+                        <button onClick={() => {
+                            setWarrMessage(false);
+                            setUpdateProcessMenager("default");
+                        }}>Cancle</button>
+
+                        <button onClick={() => {
+                            setWarrMessage(false);
+                            handleSelectFile();
+                            setUpdateProcessMenager("default");
+                        }}>Update</button>
+                    </div>
+
+                </div>
+            )}
 
             <p>Input Video: {Input_file || "Not selected"}</p>
-            <button onClick={handleSelectFile}>
+            <button onClick={() => setUpdateProcessMenager("wantUpdate")}>
                 {Input_file ? "Update File" : "Select File"}
             </button>
         </div>
