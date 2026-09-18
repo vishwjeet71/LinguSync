@@ -5,8 +5,6 @@ export default function SelectInput({ portNumber, project_id, Input_file, setDis
 
     const [updateProcessMenager, setUpdateProcessMenager] = useState("default");
     const [warrMessage, setWarrMessage] = useState(false);
-    const [userResponse, setUserResponse] = useState(false);
-
 
     const handleSelectFile = async () => {
 
