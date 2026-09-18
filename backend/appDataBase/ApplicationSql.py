@@ -1,5 +1,5 @@
 # Database librarys
-from sqlalchemy import create_engine, String, select, Integer, text
+from sqlalchemy import create_engine, String, select, Integer, text, delete
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, Session, sessionmaker
 from sqlalchemy.engine import Engine
 
@@ -230,3 +230,36 @@ def fetch_record(
             "CM": f"Failed to load data for id: {row_id}: {e}",
             "UM": "Failed to load data.",
         }
+
+
+def remove_record(
+    sql_engine: Engine = sql_engine, row_id: int = None, response: Response = None
+):
+
+    if response is None:
+        raise Exception("Response Object not provided!")
+
+    Session = sessionmaker(bind=sql_engine)
+
+    with Session() as session:
+        try:
+            stmt = delete(Projects).where(Projects.project_id == row_id)
+            result = session.execute(stmt)
+            session.commit()
+
+            if result.rowcount > 0:
+                return {
+                    "CM": f"Data deleted successfully for id: {row_id}",
+                    "UM": "Project removed successfully",
+                }
+            else:
+                response.status_code = status.HTTP_404_NOT_FOUND
+                return {"CM": f"No data found for id: {row_id}", "UM": "No data found."}
+
+        except Exception as e:
+            session.rollback()
+            response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+            return {
+                "CM": f"Failed to delete data for id: {row_id}: {e}",
+                "UM": "Failed to remove data.",
+            }
