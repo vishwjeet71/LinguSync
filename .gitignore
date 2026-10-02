@@ -7,8 +7,12 @@ RefVideo/
 
 # inference engine
 .ipynb_checkpoints/
-inference_engine/my_models
+inference_engine/my_models/*.safetensors
 inference_engine/run_models
+inference_engine/my_models/modelPrompt
+
+# SST
+inference_engine/STT/wisper_small/model.safetensors
 
 # Tauri
 .vscode
