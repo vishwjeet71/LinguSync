@@ -12,7 +12,7 @@ inference_engine/run_models
 inference_engine/my_models/modelPrompt
 
 # SST
-inference_engine/STT/wisper_small/model.safetensors
+inference_engine/STT/whisper_small/model.safetensors
 
 # Tauri
 .vscode
