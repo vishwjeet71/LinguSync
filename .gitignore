@@ -13,6 +13,7 @@ inference_engine/my_models/modelPrompt
 
 # SST
 inference_engine/STT/whisper_small/model.safetensors
+inference_engine/STT/SttInput.mp3
 
 # Tauri
 .vscode
