@@ -15,6 +15,12 @@ inference_engine/my_models/modelPrompt
 inference_engine/STT/whisper_small/model.safetensors
 inference_engine/STT/SttInput.mp3
 
+# MT
+inference_engine/MT
+
+# TTS
+inference_engine/TTS/OuteTTS 0.2 500M/model.safetensors
+
 # Tauri
 .vscode
 src-tauri/target/
