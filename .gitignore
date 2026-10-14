@@ -20,7 +20,6 @@ inference_engine/MT
 
 # TTS
 inference_engine/TTS/OuteTTS 0.2 500M/model.safetensors
-inference_engine/TTS/OuteTTS 0.2 500M/wavtokenizer_decoder.py
 inference_engine/TTS/OuteTTS 0.2 500M/decoder_model.pt
 
 # Tauri
