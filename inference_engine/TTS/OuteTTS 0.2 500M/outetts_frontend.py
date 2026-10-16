@@ -104,6 +104,7 @@ def process_text(text: str) -> list[str]:
 
 # Prompt (identical layout to the official get_completion_prompt)
 
+
 def load_speaker(path: str) -> dict:
     """Speaker profile JSON: {"text": str, "words": [{"word","duration","codes"}], "language": "en"}"""
     with open(path, "r", encoding="utf-8") as f:
@@ -172,6 +173,7 @@ class OuteTokenizer:
 #    * max_length counts prompt + new tokens
 #    * top_k / top_p / etc. come from the model's generation_config.json
 
+
 def load_sampling_defaults(generation_config_path: str) -> dict:
     with open(generation_config_path, "r") as f:
         g = json.load(f)
@@ -180,82 +182,8 @@ def load_sampling_defaults(generation_config_path: str) -> dict:
     return out
 
 
-def _sample(logits, seen, temperature, repetition_penalty, top_k, top_p, min_p, gen):
-    logits = logits.float().clone()
-    if repetition_penalty != 1.0:
-        idx = seen.nonzero(as_tuple=True)[0]
-        s = logits[idx]
-        logits[idx] = torch.where(s < 0, s * repetition_penalty, s / repetition_penalty)
-    logits = logits / temperature
-    if top_k and top_k < logits.numel():
-        kth = torch.topk(logits, top_k).values[-1]
-        logits[logits < kth] = float("-inf")
-    probs = torch.softmax(logits, dim=-1)
-    if top_p < 1.0:
-        sp, si = torch.sort(probs, descending=True)
-        remove = (torch.cumsum(sp, dim=-1) - sp) > top_p
-        probs[si[remove]] = 0.0
-    if min_p > 0.0:
-        probs[probs < min_p * probs.max()] = 0.0
-    probs = probs / probs.sum()
-    return int(torch.multinomial(probs, 1, generator=gen).item())
-
-
-@torch.inference_mode()
-def generate(
-    model,
-    prompt_ids: list[int],
-    stop_ids: set[int],
-    max_length: int = 4096,
-    temperature: float = 0.1,
-    repetition_penalty: float = 1.1,
-    top_k: int = 50,
-    top_p: float = 1.0,
-    min_p: float = 0.0,
-    seed: int | None = None,
-) -> list[int]:
-    """Returns only the NEW tokens (stop token excluded)."""
-    model.eval()
-    model.clear_kv_cache()
-    device = model.embed_tokens.weight.device
-    vocab = model.embed_tokens.weight.shape[0]
-    gen = None
-    if seed is not None:
-        gen = torch.Generator(device="cpu").manual_seed(seed)
-
-    seen = torch.zeros(vocab, dtype=torch.bool, device=device)
-    seen[torch.tensor(prompt_ids, device=device)] = True
-    step_ids = torch.tensor([prompt_ids], dtype=torch.long, device=device)
-    new_tokens = []
-
-    for _ in range(max_length - len(prompt_ids)):
-        x = model.embed_tokens(step_ids)
-        for i, layer in enumerate(model.layers):
-            x, model.kv_cache[i] = layer(x, model.kv_cache[i])
-        hidden = model.final_norm(x[:, -1, :])
-        logits = (hidden @ model.embed_tokens.weight.T)[
-            0
-        ]  # tied embeddings (config: true)
-        t = _sample(
-            logits.cpu(),
-            seen.cpu(),
-            temperature,
-            repetition_penalty,
-            top_k,
-            top_p,
-            min_p,
-            gen,
-        )
-        if t in stop_ids:
-            break
-        new_tokens.append(t)
-        seen[t] = True
-        step_ids = torch.tensor([[t]], dtype=torch.long, device=device)
-    return new_tokens
-
-
-
 # WAV writer (stdlib only)
+
 
 def save_wav(path: str, audio, sample_rate: int = 24000):
     a = (
