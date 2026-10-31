@@ -4,6 +4,9 @@ import Projects from "../components/Projects";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Project from "./Project";
 
+// pages
+import ModelsManagerPage from "./Models";
+
 export default function MainLandingPage() {
 
     return (
@@ -19,6 +22,9 @@ export default function MainLandingPage() {
                                 <Projects />
                             </>
                         }
+                    />
+                    <Route path="/model"
+                        element={<ModelsManagerPage />}
                     />
                     <Route path="/projects/:id" element={<Project />} />
                 </Routes>
