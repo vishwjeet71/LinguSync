@@ -1,0 +1,41 @@
+{
+    "efficient": {
+        "stt": {
+            "name": "whisper-small",
+            "status": false,
+            "repo-id": "openai/whisper-small",
+            "download-link": "https://huggingface.co/openai/whisper-small/resolve/main/",
+            "required-files": {
+                "config.json": false,
+                "tokenizer.json": false,
+                "model.safetensors": false
+            }
+        },
+        "mt": {
+            "name": "nllb-200-1.3B",
+            "status": false,
+            "repo-id": "facebook/nllb-200-1.3B",
+            "download-link": "https://huggingface.co/facebook/nllb-200-1.3B/resolve/main/",
+            "required-files": {
+                "config.json": false,
+                "tokenizer.json": false,
+                "pytorch_model.bin": false
+            }
+        },
+        "tts": {
+            "name": "OuteTTS-0.2-500M",
+            "status": false,
+            "repo-id": "OuteAI/OuteTTS-0.2-500M",
+            "download-link": [
+                "https://huggingface.co/OuteAI/OuteTTS-0.2-500M/resolve/main/",
+                "https://huggingface.co/OuteAI/wavtokenizer-large-75token-interface/resolve/main/decoder/decoder_model.pt?download=true"
+            ],
+            "required-files": {
+                "config.json": false,
+                "tokenizer.json": false,
+                "model.safetensors": false
+            }
+        }
+    },
+    "performance": {}
+}
