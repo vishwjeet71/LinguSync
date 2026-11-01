@@ -1,3 +1,6 @@
+// Model cart
+import ModelCart from "./ModelCart";
+
 export default function ListModels({ modelsManifest }) {
 
     const em = modelsManifest.efficient;
@@ -28,13 +31,13 @@ function ModelBlock({ blockDetail }) {
     return (
         <>
             <h3>Speech To Text model</h3>
-            {stt ? (<>{JSON.stringify(stt)}</>) : (<p>Looks like support for this model hasn't been implemented yet.</p>)}
+            {stt ? (<ModelCart modelDetails={stt} />) : (<p>Looks like support for this model hasn't been implemented yet.</p>)}
 
             <h3>Machine Translation</h3>
-            {mt ? (<>{JSON.stringify(mt)}</>) : (<p>Looks like support for this model hasn't been implemented yet.</p>)}
+            {mt ? (<ModelCart modelDetails={mt} />) : (<p>Looks like support for this model hasn't been implemented yet.</p>)}
 
             <h3>Text to Speech</h3>
-            {tts ? (<>{JSON.stringify(tts)}</>) : (<p>Looks like support for this model hasn't been implemented yet.</p>)}
+            {tts ? (<ModelCart modelDetails={tts} />) : (<p>Looks like support for this model hasn't been implemented yet.</p>)}
         </>
     )
 }
