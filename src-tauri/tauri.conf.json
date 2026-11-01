@@ -37,8 +37,8 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": [
-      "../src/assets/*"
-    ]
+    "resources": {
+      "../src/assets/models_manifest.json": "models_manifest.json"
+    }
   }
 }
