@@ -2,6 +2,9 @@ import { useState, useEffect } from "react";
 import { resolveResource } from "@tauri-apps/api/path";
 import { exists, writeTextFile, readTextFile, BaseDirectory } from "@tauri-apps/plugin-fs";
 
+// component
+import ListModels from "../components/ListModels";
+
 // project context
 import { useProjectContext } from "../App";
 
@@ -60,7 +63,7 @@ export default function ModelsManagerPage() {
             <h1>Manage models</h1>
             {modelData ? (
                 <>
-                    <pre>{JSON.stringify(modelData, null, 2)}</pre>
+                    <ListModels modelsManifest={modelData} />
                 </>
             ) : (
                 <p>Loading your data...</p>
