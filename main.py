@@ -15,6 +15,9 @@ from backend.appDataBase.ApplicationSql import (
     fetch_record,
 )
 
+# Downloading Manager
+from backend.resourcesManagement import handleRequest
+
 app = FastAPI(
     title="LinguSync", description="Local video Dudding System.", version="1.0"
 )
@@ -40,6 +43,11 @@ class ProjectId(BaseModel):
 class ProjectUpdate(BaseModel):
     project_id: int
     input_video: str
+
+
+class Resources(BaseModel):
+    model_name: str
+    file_name: str
 
 
 @app.get("/lingusync")
@@ -118,3 +126,15 @@ async def update_project(body: ProjectUpdate, response: Response):
             "CM": f"Failed to update project: {body.project_id}",
             "UM": "Unable to update your details.",
         }
+
+
+@app.post("/download_resources")
+async def downloadResources(body: Resources, response: Response):
+
+    try:
+        print(f"{body.model_name}, {body.file_name}")
+        return handleRequest(body.model_name, body.file_name, response)
+
+    except Exception as E:
+        response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        return {"CM": "", "UM": ""}
