@@ -16,11 +16,13 @@ inference_engine/STT/whisper_small/model.safetensors
 inference_engine/STT/SttInput.mp3
 
 # MT
-inference_engine/MT
+inference_engine/MT/facebook-nllb-200-1 3B/pytorch_model.bin
 
 # TTS
 inference_engine/TTS/OuteTTS 0.2 500M/model.safetensors
 inference_engine/TTS/OuteTTS 0.2 500M/decoder_model.pt
+inference_engine/TTS/OuteTTS 0.2 500M/demo.mp4
+inference_engine/TTS/OuteTTS 0.2 500M/OuteTTS 0.2 Architecture.png
 
 # Tauri
 .vscode

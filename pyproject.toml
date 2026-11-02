@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi[standard]>=0.141.1",
+    "httpx>=0.28.1",
     "huggingface-hub>=2.0.0",
     "inflect>=7.5.0",
     "openai-whisper>=20250625",
