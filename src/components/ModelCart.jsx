@@ -1,4 +1,9 @@
-export default function ModelCart({ modelDetails }) {
+// project contex
+import { useProjectContext } from "../App";
+
+export default function ModelCart({ modelDetails, isDownloading, setIsDownloading }) {
+    const { portNumber, setDisplayMessage } = useProjectContext();
+
     return (
         <div>
             <p>Name: {modelDetails?.name ?? "Not Specified"}</p>
@@ -10,7 +15,7 @@ export default function ModelCart({ modelDetails }) {
                     <div key={fileName}>
                         <span>{fileName}</span>
 
-                        <button>
+                        <button disabled={isDownloading} onClick={() => handleDownload(modelDetails.name, fileName, portNumber, setDisplayMessage, setIsDownloading)} >
                             {isDownloaded ? "Remove" : "Download"}
                         </button>
                     </div>
@@ -18,4 +23,31 @@ export default function ModelCart({ modelDetails }) {
             )}
         </div>
     );
+}
+
+async function handleDownload(modelName, fileName, portNumber, setDisplayMessage, setIsDownloading) {
+    setIsDownloading(true);
+    setDisplayMessage(`Start Downloading ${modelName} ${fileName}..`);
+
+    try {
+        const response = await fetch(
+            `http://localhost:${portNumber}/download_resources`,
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    "model_name": modelName, "file_name": fileName
+                })
+            });
+
+        if (!response.ok) throw new Error("Download failed");
+
+        setDisplayMessage(`${modelName} ${fileName} downloaded successfully`);
+    } catch (error) {
+        setDisplayMessage(`Failed to download ${modelName} ${fileName}`);
+    } finally {
+        setIsDownloading(false);
+    }
 }
