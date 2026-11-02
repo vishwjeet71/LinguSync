@@ -10,7 +10,7 @@ import { useProjectContext } from "../App";
 
 export default function ModelsManagerPage() {
     const [modelData, setModelData] = useState(null);
-    const [isDataMoved, setIsDataMoved] = useState(false);
+    const [needToRefresh, setNeedToRefresh] = useState(0);
 
     const { setDisplayMessage } = useProjectContext();
 
@@ -36,11 +36,10 @@ export default function ModelsManagerPage() {
 
                     console.log("models_manifest.json successfully moved to AppData.");
                     setDisplayMessage("New model manifest created successfully!");
-                    setIsDataMoved(true);
+                    setNeedToRefresh((c) => c + 1);
 
                 } else {
                     console.log("models_manifest.json found in AppData.");
-                    setDisplayMessage("Data loaded successfully!");
 
                     const currentDataText = await readTextFile("models_manifest.json", { baseDir: BaseDirectory.AppData });
                     const currentJsonData = await JSON.parse(currentDataText);
@@ -56,14 +55,14 @@ export default function ModelsManagerPage() {
         }
 
         loadModelData();
-    }, [isDataMoved]);
+    }, [needToRefresh]);
 
     return (
         <>
             <h1>Manage models</h1>
             {modelData ? (
                 <>
-                    <ListModels modelsManifest={modelData} />
+                    <ListModels modelsManifest={modelData} setNeedToRefresh={setNeedToRefresh} />
                 </>
             ) : (
                 <p>Loading your data...</p>

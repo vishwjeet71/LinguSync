@@ -1,7 +1,7 @@
 // project contex
 import { useProjectContext } from "../App";
 
-export default function ModelCart({ modelDetails, isDownloading, setIsDownloading }) {
+export default function ModelCart({ modelDetails, isDownloading, setIsDownloading, setNeedToRefresh, setRequestFile }) {
     const { portNumber, setDisplayMessage } = useProjectContext();
 
     return (
@@ -15,7 +15,9 @@ export default function ModelCart({ modelDetails, isDownloading, setIsDownloadin
                     <div key={fileName}>
                         <span>{fileName}</span>
 
-                        <button disabled={isDownloading} onClick={() => handleDownload(modelDetails.name, fileName, portNumber, setDisplayMessage, setIsDownloading)} >
+                        <button disabled={isDownloading} onClick={() => handleDownload(
+                            modelDetails.name, fileName, portNumber, setDisplayMessage, setIsDownloading, setNeedToRefresh, isDownloaded, setRequestFile
+                        )} >
                             {isDownloaded ? "Remove" : "Download"}
                         </button>
                     </div>
@@ -25,9 +27,23 @@ export default function ModelCart({ modelDetails, isDownloading, setIsDownloadin
     );
 }
 
-async function handleDownload(modelName, fileName, portNumber, setDisplayMessage, setIsDownloading) {
+async function handleDownload(
+    modelName, fileName, portNumber, setDisplayMessage, setIsDownloading, setNeedToRefresh, isDownloaded, setRequestFile
+) {
+
+    if (isDownloaded) {
+        const confirmed = await new Promise((resolve) => {
+            setRequestFile({
+                fileName,
+                resolve
+            });
+        });
+
+        if (!confirmed) return;
+    }
+
     setIsDownloading(true);
-    setDisplayMessage(`Start Downloading ${modelName} ${fileName}..`);
+    setDisplayMessage(`${isDownloaded ? 'Removing' : 'Downloading'} ${modelName} ${fileName}`);
 
     try {
         const response = await fetch(
@@ -44,10 +60,12 @@ async function handleDownload(modelName, fileName, portNumber, setDisplayMessage
 
         if (!response.ok) throw new Error("Download failed");
 
-        setDisplayMessage(`${modelName} ${fileName} downloaded successfully`);
+        setDisplayMessage(`${modelName} ${fileName} ${isDownloaded ? 'removed' : 'downloaded'} successfully.`);
+
     } catch (error) {
-        setDisplayMessage(`Failed to download ${modelName} ${fileName}`);
+        setDisplayMessage(`Failed to ${isDownloaded ? 'remove' : 'download'} ${modelName} ${fileName}.`);
     } finally {
         setIsDownloading(false);
+        setNeedToRefresh((c) => c + 1);
     }
 }
