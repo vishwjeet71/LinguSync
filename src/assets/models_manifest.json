@@ -33,7 +33,8 @@
             "requiredFiles": {
                 "config.json": false,
                 "tokenizer.json": false,
-                "model.safetensors": false
+                "model.safetensors": false,
+                "decoder_model.pt": false
             }
         }
     },
