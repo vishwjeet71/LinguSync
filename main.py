@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Response, status
+from fastapi import FastAPI, Response, status, HTTPException, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
 # Input Data validation & other
@@ -16,10 +16,27 @@ from backend.appDataBase.ApplicationSql import (
 )
 
 # Downloading Manager
-from backend.resourcesManagement import handleRequest
+from backend.resourcesManagement import (
+    DownloadManager,
+    get_file_credentials,
+    inverse_file_status,
+)
+from contextlib import asynccontextmanager
+import asyncio, os
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app.state.download_manager = DownloadManager(str(app_data_path))
+    yield
+    await app.state.download_manager.close()
+
 
 app = FastAPI(
-    title="LinguSync", description="Local video Dudding System.", version="1.0"
+    title="LinguSync",
+    description="Local video Dudding System.",
+    version="1.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -128,13 +145,122 @@ async def update_project(body: ProjectUpdate, response: Response):
         }
 
 
-@app.post("/download_resources")
+@app.post("/downloads")
 async def downloadResources(body: Resources, response: Response):
 
+    manager = app.state.download_manager
+    manifest_file_path = str(app_data_path) + "/models_manifest.json"
+
+    if not os.path.exists(manifest_file_path):
+        response.status_code = status.HTTP_404_NOT_FOUND
+        return {
+            "CM": "Model manifest file not found.",
+            "UM": "Model information file is missing.",
+        }
+
+    model_name = body.model_name
+    file_url, file_name, relative_path = get_file_credentials(
+        body.file_name, model_name
+    )
+
+    isRemoval = inverse_file_status(model_name, file_name)
+    if isRemoval:
+        try:
+            os.remove(f"{str(app_data_path) + relative_path}")
+            inverse_file_status(model_name, file_name, inverse=True)
+            return {
+                "CM": f"{file_name} was removed from the device.",
+                "UM": f"{file_name} was removed!",
+            }
+
+        except Exception as e:
+            response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+            return {
+                "CM": f"Failed to remove file '{file_name}'. Error: {e}",
+                "UM": f"Unable to remove '{file_name}' from {model_name}.",
+            }
+
     try:
-        print(f"{body.model_name}, {body.file_name}")
-        return handleRequest(body.model_name, body.file_name, response)
+        download_id = await manager.download_file(file_url, file_name, relative_path)
+        inverse_file_status(model_name, file_name, inverse=True)
+
+        return {"CM": download_id, "UM": f"{file_name} start to downloading.."}
+
+    except ValueError as e:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return {
+            "CM": f"DOwnloading failed: {e}",
+            "UM": "Unable to Download!",
+        }
 
     except Exception as E:
         response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
-        return {"CM": "", "UM": ""}
+        return {
+            "CM": f"Failed to download '{file_name}'. Error: {e}",
+            "UM": f"Unable to download '{file_name}'. Please try again.",
+        }
+
+
+@app.delete("/downloads/{download_id}")
+async def cancel_download(download_id: str, response: Response):
+
+    manager = app.state.download_manager
+
+    success = await manager.cancel_download(download_id)
+
+    if not success:
+        response.status_code = status.HTTP_404_NOT_FOUND
+        return {
+            "CM": f"For {download_id} Download was not found or cannot be cancelled",
+            "UM": "Download not found or cannot be cancelled",
+        }
+
+    return {"CM": f"process id: {download_id} cancelled", "UM": "cancelled"}
+
+
+@app.get("/downloads/{download_id}")
+async def download_status(download_id: str, response: Response):
+
+    manager = app.state.download_manager
+    process_status = manager.get_status(download_id)
+
+    if not process_status:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return {
+            "CM": f"Download not found with id: {download_id}",
+            "UM": "Download not found",
+        }
+
+    return process_status
+
+
+@app.websocket("/downloads/{download_id}/progress")
+async def download_progress(websocket: WebSocket, download_id: str):
+
+    await websocket.accept()
+
+    manager = app.state.download_manager
+
+    try:
+        while True:
+            status = manager.get_status(download_id)
+
+            if status is None:
+                await websocket.send_json({"error": "Download not found"})
+                break
+
+            # Remove unnecessary fields before sending.
+            status.pop("error", None) if status["error"] is None else None
+
+            await websocket.send_json(status)
+
+            if status["status"] in ("completed", "failed", "cancelled"):
+                break
+
+            await asyncio.sleep(0.5)
+
+    except Exception:
+        pass
+
+    finally:
+        await websocket.close()
