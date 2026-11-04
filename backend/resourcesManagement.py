@@ -14,7 +14,7 @@ def get_file_credentials(file_name: str, model_name: str):
 
     url = None
     file_name = file_name
-    relative_path = f"models/{model_name}/{file_name}"
+    relative_path = f"models/{model_name}/"
 
     try:
         manifest = json.load(open(manifest_file_path))

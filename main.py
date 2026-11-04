@@ -166,7 +166,7 @@ async def downloadResources(body: Resources, response: Response):
     isRemoval = inverse_file_status(model_name, file_name)
     if isRemoval:
         try:
-            os.remove(f"{str(app_data_path) + relative_path}")
+            os.remove(f"{str(app_data_path)}/{relative_path + file_name}")
             inverse_file_status(model_name, file_name, inverse=True)
             return {
                 "CM": f"{file_name} was removed from the device.",
