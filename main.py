@@ -164,10 +164,14 @@ async def downloadResources(body: Resources, response: Response):
     )
 
     isRemoval = inverse_file_status(model_name, file_name)
+
+    # File removal
     if isRemoval:
         try:
             os.remove(f"{str(app_data_path)}/{relative_path + file_name}")
+
             inverse_file_status(model_name, file_name, inverse=True)
+
             return {
                 "CM": f"{file_name} was removed from the device.",
                 "UM": f"{file_name} was removed!",
@@ -180,20 +184,19 @@ async def downloadResources(body: Resources, response: Response):
                 "UM": f"Unable to remove '{file_name}' from {model_name}.",
             }
 
+    # Start download
     try:
-        download_id = await manager.download_file(file_url, file_name, relative_path)
-        inverse_file_status(model_name, file_name, inverse=True)
+        download_id = await manager.download_file(
+            file_url, file_name, relative_path, model_name=model_name
+        )
 
-        return {"CM": download_id, "UM": f"{file_name} start to downloading.."}
+        return {"CM": download_id, "UM": f"{file_name} started downloading."}
 
     except ValueError as e:
         response.status_code = status.HTTP_400_BAD_REQUEST
-        return {
-            "CM": f"DOwnloading failed: {e}",
-            "UM": "Unable to Download!",
-        }
+        return {"CM": f"Downloading failed: {e}", "UM": "Unable to download!"}
 
-    except Exception as E:
+    except Exception as e:
         response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
         return {
             "CM": f"Failed to download '{file_name}'. Error: {e}",

@@ -81,10 +81,15 @@ class DownloadManager:
 
         self.downloads = {}
 
-    async def download_file(self, url: str, filename: str, relative_path: str = ""):
+    async def download_file(
+        self,
+        url: str,
+        filename: str,
+        relative_path: str = "",
+        model_name: str = "",
+    ):
         download_id = str(uuid.uuid4())
 
-        # Prevent path traversal.
         destination_dir = (self.download_dir / relative_path).resolve()
 
         if not destination_dir.is_relative_to(self.download_dir):
@@ -98,6 +103,7 @@ class DownloadManager:
         state = {
             "id": download_id,
             "filename": destination.name,
+            "model_name": model_name,
             "status": "downloading",
             "downloaded": 0,
             "total": None,
@@ -122,8 +128,8 @@ class DownloadManager:
                 response.raise_for_status()
 
                 content_length = response.headers.get("content-length")
-
                 total = int(content_length) if content_length else None
+
                 state["total"] = total
 
                 downloaded = 0
@@ -143,9 +149,12 @@ class DownloadManager:
                                 downloaded / total * 100 if total > 0 else 100
                             )
 
-                # Ensure data is flushed before finalizing.
-                # Rename only after a successful download.
                 temp_file.replace(destination)
+
+                # Update manifest only after successful download.
+                inverse_file_status(
+                    state["model_name"], state["filename"], inverse=True
+                )
 
                 state["status"] = "completed"
                 state["remaining"] = 0
@@ -167,10 +176,7 @@ class DownloadManager:
 
         state = self.downloads.get(download_id)
 
-        if not state:
-            return False
-
-        if state["status"] != "downloading":
+        if not state or state["status"] != "downloading":
             return False
 
         task = state["task"]
@@ -193,13 +199,15 @@ class DownloadManager:
         return {key: value for key, value in state.items() if key != "task"}
 
     async def close(self):
-        for state in self.downloads.values():
-            if state["status"] == "downloading":
-                state["task"].cancel()
+        tasks = [
+            state["task"]
+            for state in self.downloads.values()
+            if state["task"] and not state["task"].done()
+        ]
 
-        await asyncio.gather(
-            *[state["task"] for state in self.downloads.values() if state["task"]],
-            return_exceptions=True,
-        )
+        for task in tasks:
+            task.cancel()
+
+        await asyncio.gather(*tasks, return_exceptions=True)
 
         await self.client.aclose()
