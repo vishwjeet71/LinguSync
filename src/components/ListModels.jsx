@@ -1,80 +1,306 @@
-// Model cart
-import { useState } from "react";
+
+import { useState, useEffect, useRef } from "react";
 import ModelCart from "./ModelCart";
+import { useProjectContext } from "../App";
 
 export default function ListModels({ modelsManifest, setNeedToRefresh }) {
+    const { portNumber, setDisplayMessage } = useProjectContext();
+
+    // { downloadId: downloadStatus }
+    const [downloads, setDownloads] = useState({});
+    const sockets = useRef({});
+
+    useEffect(() => {
+        return () => {
+            Object.values(sockets.current).forEach(socket => socket.close());
+            sockets.current = {};
+        };
+    }, []);
+
+    function startTracking(downloadId, filename, modelName) {
+        setDownloads(prev => ({
+            ...prev,
+            [downloadId]: {
+                id: downloadId,
+                filename,
+                modelName,
+                status: "connecting",
+                downloaded: 0,
+                total: null,
+                remaining: null,
+                progress: 0
+            }
+        }));
+
+        const socket = new WebSocket(
+            `ws://localhost:${portNumber}/downloads/${downloadId}/progress`
+        );
+
+        sockets.current[downloadId] = socket;
+
+        socket.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+
+            if (data.error) {
+                setDownloads(prev => ({
+                    ...prev,
+                    [downloadId]: {
+                        ...prev[downloadId],
+                        status: "failed",
+                        error: data.error
+                    }
+                }));
+                socket.close();
+                return;
+            }
+
+            setDownloads(prev => ({
+                ...prev,
+                [downloadId]: {
+                    ...prev[downloadId],
+                    ...data
+                }
+            }));
+
+            if (["completed", "failed", "cancelled"].includes(data.status)) {
+                socket.close();
+                delete sockets.current[downloadId];
+
+                setNeedToRefresh(c => c + 1);
+
+                if (data.status === "completed") {
+                    setDisplayMessage(`${filename} downloaded successfully.`);
+                } else {
+                    setDisplayMessage(
+                        `${filename}: ${data.status}${data.error ? ` - ${data.error}` : ""}`
+                    );
+                }
+            }
+        };
+
+        socket.onerror = () => {
+            setDownloads(prev => ({
+                ...prev,
+                [downloadId]: {
+                    ...prev[downloadId],
+                    connectionError: true
+                }
+            }));
+        };
+
+        socket.onclose = () => {
+            if (sockets.current[downloadId] === socket) {
+                delete sockets.current[downloadId];
+            }
+        };
+    }
+
+    async function cancelDownload(downloadId) {
+        const previous = downloads[downloadId];
+
+        if (!previous || previous.status !== "downloading") return;
+
+        setDownloads(prev => ({
+            ...prev,
+            [downloadId]: {
+                ...prev[downloadId],
+                status: "cancelling"
+            }
+        }));
+
+        try {
+            const response = await fetch(
+                `http://localhost:${portNumber}/downloads/${downloadId}`,
+                { method: "DELETE" }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.UM || "Unable to cancel download");
+            }
+
+            setDisplayMessage(`${previous.filename} cancellation requested.`);
+
+        } catch (error) {
+            setDownloads(prev => ({
+                ...prev,
+                [downloadId]: {
+                    ...prev[downloadId],
+                    status: "downloading"
+                }
+            }));
+
+            setDisplayMessage(error.message);
+        }
+    }
+
+    const downloadProps = {
+        portNumber,
+        startTracking,
+        setNeedToRefresh,
+        setDisplayMessage
+    };
 
     const em = modelsManifest.efficient;
     const pm = modelsManifest.performance;
 
-    const [isDownloading, setIsDownloading] = useState(false);
-    const downloadProps = { isDownloading, setIsDownloading };
-
     return (
-        <>
-            <div>
-                <div>
-                    {em && Object.keys(em).length > 0 ? (<><h2>Efficient Models</h2>
-                        <ModelBlock blockDetail={em} setNeedToRefresh={setNeedToRefresh} {...downloadProps} /></>) : null}
-                </div>
-                <div>
-                    {pm && Object.keys(pm).length > 0 ? (<><h2>Performance Models</h2>
-                        <ModelBlock blockDetail={pm} setNeedToRefresh={setNeedToRefresh} {...downloadProps} /></>) : null}
-                </div>
-                <div>{isDownloading ? <DownloadingBar /> : null}</div>
-            </div>
-        </>
-    )
+        <div>
+            {em && Object.keys(em).length > 0 && (
+                <>
+                    <h2>Efficient Models</h2>
+                    <ModelBlock blockDetail={em} {...downloadProps} />
+                </>
+            )}
+
+            {pm && Object.keys(pm).length > 0 && (
+                <>
+                    <h2>Performance Models</h2>
+                    <ModelBlock blockDetail={pm} {...downloadProps} />
+                </>
+            )}
+
+            <DownloadingBar
+                downloads={downloads}
+                onCancel={cancelDownload}
+            />
+        </div>
+    );
 }
 
-function ModelBlock({ blockDetail, setNeedToRefresh, ...downloadProps }) {
+function ModelBlock({ blockDetail, ...downloadProps }) {
+    const [requestFile, setRequestFile] = useState(null);
 
-    const stt = blockDetail?.stt;
-    const mt = blockDetail?.mt;
-    const tts = blockDetail?.tts;
-
-    const [requestFile, setRequestFile] = useState("");
+    const { stt, mt, tts } = blockDetail;
 
     return (
         <>
             {requestFile && (
-                <FileRemovingWarrningPOPUP
+                <FileRemovingWarning
                     requestFile={requestFile.fileName}
                     onConfirm={() => {
                         requestFile.resolve(true);
-                        setRequestFile("");
+                        setRequestFile(null);
                     }}
                     onCancel={() => {
                         requestFile.resolve(false);
-                        setRequestFile("");
+                        setRequestFile(null);
                     }}
                 />
             )}
+
             <h3>Speech To Text model</h3>
-            {stt ? (<ModelCart modelDetails={stt} setRequestFile={setRequestFile} setNeedToRefresh={setNeedToRefresh} {...downloadProps} />) : (<p>Looks like support for this model hasn't been implemented yet.</p>)}
+            {stt ? (
+                <ModelCart
+                    modelDetails={stt}
+                    setRequestFile={setRequestFile}
+                    {...downloadProps}
+                />
+            ) : <p>Not implemented yet.</p>}
 
             <h3>Machine Translation</h3>
-            {mt ? (<ModelCart modelDetails={mt} setRequestFile={setRequestFile} setNeedToRefresh={setNeedToRefresh} {...downloadProps} />) : (<p>Looks like support for this model hasn't been implemented yet.</p>)}
+            {mt ? (
+                <ModelCart
+                    modelDetails={mt}
+                    setRequestFile={setRequestFile}
+                    {...downloadProps}
+                />
+            ) : <p>Not implemented yet.</p>}
 
-            <h3>Text to Speech</h3>
-            {tts ? (<ModelCart modelDetails={tts} setRequestFile={setRequestFile} setNeedToRefresh={setNeedToRefresh} {...downloadProps} />) : (<p>Looks like support for this model hasn't been implemented yet.</p>)}
+            <h3>Text To Speech</h3>
+            {tts ? (
+                <ModelCart
+                    modelDetails={tts}
+                    setRequestFile={setRequestFile}
+                    {...downloadProps}
+                />
+            ) : <p>Not implemented yet.</p>}
         </>
-    )
+    );
 }
 
-function DownloadingBar() {
+
+function DownloadingBar({ downloads, onCancel }) {
+
+    const activeDownloads = Object.values(downloads).filter(
+        download =>
+            ["connecting", "downloading", "cancelling"].includes(download.status)
+    );
+
+    if (activeDownloads.length === 0) return null;
+
     return (
-        <>Downloading....</>
-    )
+        <section>
+            <h3>Downloads</h3>
+
+            {activeDownloads.map(download => (
+                <div key={download.id}>
+                    <p>
+                        <strong>{download.filename}</strong>
+                        {" "}({download.modelName})
+                    </p>
+
+                    <p>Status: {download.status}</p>
+
+                    {download.total != null ? (
+                        <progress
+                            value={download.progress ?? 0}
+                            max="100"
+                        />
+                    ) : (
+                        <progress />
+                    )}
+
+                    <p>
+                        {download.total != null
+                            ? `${download.progress.toFixed(1)}%`
+                            : "Calculating progress..."}
+                        {" | "}
+                        {formatBytes(download.downloaded)}
+                        {" / "}
+                        {formatBytes(download.total)}
+                    </p>
+
+                    {download.status === "downloading" && (
+                        <button onClick={() => onCancel(download.id)}>
+                            Cancel
+                        </button>
+                    )}
+
+                    {download.status === "cancelling" && (
+                        <p>Cancelling download...</p>
+                    )}
+                </div>
+            ))}
+        </section>
+    );
 }
 
-function FileRemovingWarrningPOPUP({ requestFile, onConfirm, onCancel }) {
 
+function formatBytes(bytes) {
+    if (bytes == null) return "Unknown";
+
+    if (bytes < 1024) return `${bytes} B`;
+
+    const units = ["KB", "MB", "GB", "TB"];
+    let size = bytes / 1024;
+    let index = 0;
+
+    while (size >= 1024 && index < units.length - 1) {
+        size /= 1024;
+        index++;
+    }
+
+    return `${size.toFixed(2)} ${units[index]}`;
+}
+
+function FileRemovingWarning({ requestFile, onConfirm, onCancel }) {
     return (
         <div>
-            <p>Are you sure you want to remove "{requestFile}" ?</p>
+            <p>Are you sure you want to remove "{requestFile}"?</p>
             <button onClick={onConfirm}>Yes</button>
-            <button onClick={onCancel}>Cancle</button>
+            <button onClick={onCancel}>Cancel</button>
         </div>
-    )
+    );
 }

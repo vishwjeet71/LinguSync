@@ -1,9 +1,12 @@
-// project contex
-import { useProjectContext } from "../App";
 
-export default function ModelCart({ modelDetails, isDownloading, setIsDownloading, setNeedToRefresh, setRequestFile }) {
-    const { portNumber, setDisplayMessage } = useProjectContext();
-
+export default function ModelCart({
+    modelDetails,
+    portNumber,
+    startTracking,
+    setNeedToRefresh,
+    setRequestFile,
+    setDisplayMessage
+}) {
     return (
         <div>
             <p>Name: {modelDetails?.name ?? "Not Specified"}</p>
@@ -15,9 +18,18 @@ export default function ModelCart({ modelDetails, isDownloading, setIsDownloadin
                     <div key={fileName}>
                         <span>{fileName}</span>
 
-                        <button disabled={isDownloading} onClick={() => handleDownload(
-                            modelDetails.name, fileName, portNumber, setDisplayMessage, setIsDownloading, setNeedToRefresh, isDownloaded, setRequestFile
-                        )} >
+                        <button
+                            onClick={() => handleDownload(
+                                modelDetails.name,
+                                fileName,
+                                isDownloaded,
+                                portNumber,
+                                startTracking,
+                                setNeedToRefresh,
+                                setRequestFile,
+                                setDisplayMessage
+                            )}
+                        >
                             {isDownloaded ? "Remove" : "Download"}
                         </button>
                     </div>
@@ -28,44 +40,66 @@ export default function ModelCart({ modelDetails, isDownloading, setIsDownloadin
 }
 
 async function handleDownload(
-    modelName, fileName, portNumber, setDisplayMessage, setIsDownloading, setNeedToRefresh, isDownloaded, setRequestFile
+    modelName,
+    fileName,
+    isDownloaded,
+    portNumber,
+    startTracking,
+    setNeedToRefresh,
+    setRequestFile,
+    setDisplayMessage
 ) {
-
     if (isDownloaded) {
-        const confirmed = await new Promise((resolve) => {
-            setRequestFile({
-                fileName,
-                resolve
-            });
+        const confirmed = await new Promise(resolve => {
+            setRequestFile({ fileName, resolve });
         });
 
         if (!confirmed) return;
     }
 
-    setIsDownloading(true);
-    setDisplayMessage(`${isDownloaded ? 'Removing' : 'Downloading'} ${modelName} ${fileName}`);
+    setDisplayMessage(
+        `${isDownloaded ? "Removing" : "Starting download:"} ${fileName}`
+    );
 
     try {
         const response = await fetch(
-            `http://localhost:${portNumber}/download_resources`,
+            `http://localhost:${portNumber}/downloads`,
             {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json"
                 },
                 body: JSON.stringify({
-                    "model_name": modelName, "file_name": fileName
+                    model_name: modelName,
+                    file_name: fileName
                 })
-            });
+            }
+        );
 
-        if (!response.ok) throw new Error("Download failed");
+        const data = await response.json();
 
-        setDisplayMessage(`${modelName} ${fileName} ${isDownloaded ? 'removed' : 'downloaded'} successfully.`);
+        if (!response.ok) {
+            throw new Error(data.UM || data.CM || "Request failed");
+        }
+
+        if (isDownloaded) {
+            setDisplayMessage(data.UM || `${fileName} removed.`);
+            setNeedToRefresh(c => c + 1);
+            return;
+        }
+
+        const downloadId = data.CM;
+
+        if (!downloadId) {
+            throw new Error("Backend did not return a download ID.");
+        }
+
+        startTracking(downloadId, fileName, modelName);
+
+        setDisplayMessage(`${fileName} download started.`);
 
     } catch (error) {
-        setDisplayMessage(`Failed to ${isDownloaded ? 'remove' : 'download'} ${modelName} ${fileName}.`);
-    } finally {
-        setIsDownloading(false);
-        setNeedToRefresh((c) => c + 1);
+        console.error("Download request failed:", error);
+        setDisplayMessage(error.message);
     }
 }
