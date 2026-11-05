@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import ModelCart from "./ModelCart";
 import { useProjectContext } from "../App";
 
@@ -10,14 +10,12 @@ export default function ListModels({ modelsManifest, setNeedToRefresh }) {
     const [downloads, setDownloads] = useState({});
     const sockets = useRef({});
 
-    useEffect(() => {
-        return () => {
-            Object.values(sockets.current).forEach(socket => socket.close());
-            sockets.current = {};
-        };
-    }, []);
 
-    function startTracking(downloadId, filename, modelName) {
+    const startTracking = useCallback((downloadId, filename, modelName) => {
+
+        // Prevent duplicate WebSocket connections.
+        if (sockets.current[downloadId]) return;
+
         setDownloads(prev => ({
             ...prev,
             [downloadId]: {
@@ -50,6 +48,7 @@ export default function ListModels({ modelsManifest, setNeedToRefresh }) {
                         error: data.error
                     }
                 }));
+
                 socket.close();
                 return;
             }
@@ -68,13 +67,11 @@ export default function ListModels({ modelsManifest, setNeedToRefresh }) {
 
                 setNeedToRefresh(c => c + 1);
 
-                if (data.status === "completed") {
-                    setDisplayMessage(`${filename} downloaded successfully.`);
-                } else {
-                    setDisplayMessage(
-                        `${filename}: ${data.status}${data.error ? ` - ${data.error}` : ""}`
-                    );
-                }
+                setDisplayMessage(
+                    data.status === "completed"
+                        ? `${filename} downloaded successfully.`
+                        : `${filename}: ${data.status}`
+                );
             }
         };
 
@@ -93,7 +90,66 @@ export default function ListModels({ modelsManifest, setNeedToRefresh }) {
                 delete sockets.current[downloadId];
             }
         };
-    }
+
+    }, [portNumber, setNeedToRefresh, setDisplayMessage]);
+
+    useEffect(() => {
+        let isMounted = true;
+
+        async function restoreDownloads() {
+            try {
+                const response = await fetch(
+                    `http://localhost:${portNumber}/downloads`
+                );
+
+                if (!response.ok) {
+                    throw new Error("Unable to restore active downloads.");
+                }
+
+                const data = await response.json();
+
+                if (!isMounted) return;
+
+                data.downloads.forEach(download => {
+                    startTracking(
+                        download.id,
+                        download.filename,
+                        download.model_name
+                    );
+                });
+
+            } catch (error) {
+                console.error("Failed to restore downloads:", error);
+            }
+        }
+
+        restoreDownloads();
+
+        return () => {
+            isMounted = false;
+
+            Object.values(sockets.current).forEach(socket => {
+
+                if (socket.readyState === WebSocket.CONNECTING) {
+
+                    // Wait until connection is established, then close it.
+                    socket.addEventListener(
+                        "open",
+                        () => socket.close(),
+                        { once: true }
+                    );
+
+                } else if (socket.readyState === WebSocket.OPEN) {
+                    socket.close();
+                }
+
+            });
+
+            sockets.current = {};
+        };
+
+    }, [portNumber, startTracking]);
+
 
     async function cancelDownload(downloadId) {
         const previous = downloads[downloadId];
@@ -120,7 +176,23 @@ export default function ListModels({ modelsManifest, setNeedToRefresh }) {
                 throw new Error(data.UM || "Unable to cancel download");
             }
 
-            setDisplayMessage(`${previous.filename} cancellation requested.`);
+            // Backend confirms cancellation.
+            // Close the WebSocket.
+            const socket = sockets.current[downloadId];
+
+            if (socket) {
+                socket.close();
+                delete sockets.current[downloadId];
+            }
+
+            // Immediately remove the download from frontend state.
+            setDownloads(prev => {
+                const updated = { ...prev };
+                delete updated[downloadId];
+                return updated;
+            });
+
+            setDisplayMessage(`${previous.filename} cancelled successfully.`);
 
         } catch (error) {
             setDownloads(prev => ({
@@ -134,6 +206,7 @@ export default function ListModels({ modelsManifest, setNeedToRefresh }) {
             setDisplayMessage(error.message);
         }
     }
+
 
     const downloadProps = {
         portNumber,

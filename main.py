@@ -267,3 +267,10 @@ async def download_progress(websocket: WebSocket, download_id: str):
 
     finally:
         await websocket.close()
+
+
+@app.get("/downloads")
+async def get_active_downloads():
+    manager = app.state.download_manager
+
+    return {"downloads": manager.get_active_downloads()}

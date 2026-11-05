@@ -211,3 +211,11 @@ class DownloadManager:
         await asyncio.gather(*tasks, return_exceptions=True)
 
         await self.client.aclose()
+
+    def get_active_downloads(self):
+
+        return [
+            self.get_status(download_id)
+            for download_id, state in self.downloads.items()
+            if state["status"] == "downloading"
+        ]
