@@ -13,6 +13,7 @@ from backend.appDataBase.ApplicationSql import (
     load_data_from_sql,
     add_sql_data,
     fetch_record,
+    remove_record,
 )
 
 # Downloading Manager
@@ -274,3 +275,11 @@ async def get_active_downloads():
     manager = app.state.download_manager
 
     return {"downloads": manager.get_active_downloads()}
+
+
+@app.delete("/remove/{projectId}")
+async def remove_project(
+    projectId: int, response: Response
+):  # Initial Project Cleanup Logic
+    # Remove all temporary data generated during input processing.
+    return remove_record(row_id=projectId, response=response)
