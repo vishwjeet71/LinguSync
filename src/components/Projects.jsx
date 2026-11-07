@@ -13,6 +13,7 @@ export default function Projects() {
 
     const [isFailed, setIsFailed] = useState(false);
     const [isOpen, setIsOpen] = useState(false);
+    const [newProjectCount, setNewProjectCount] = useState(0);
 
     useEffect(() => {
 
@@ -37,7 +38,7 @@ export default function Projects() {
 
         fetchData();
 
-    }, []);
+    }, [newProjectCount]);
 
     if (projectsData === "") {
         return (
@@ -71,6 +72,7 @@ export default function Projects() {
                         setProjectName={setProjectName}
                         portNumber={portNumber}
                         setDisplayMessage={setDisplayMessage}
+                        setNewProjectCount={setNewProjectCount}
                     />
                 </div>
 
@@ -110,6 +112,7 @@ export default function Projects() {
                         setProjectName={setProjectName}
                         portNumber={portNumber}
                         setDisplayMessage={setDisplayMessage}
+                        setNewProjectCount={setNewProjectCount}
                     />
                 </div>
 
@@ -126,7 +129,8 @@ const ProjectAddingWindow = ({
     projectName,
     setProjectName,
     portNumber,
-    setDisplayMessage
+    setDisplayMessage,
+    setNewProjectCount,
 }) => {
 
     const handleSave = async (e) => {
@@ -153,6 +157,7 @@ const ProjectAddingWindow = ({
             setDisplayMessage(responseData.UM);
             setIsOpen(false);
             setProjectName("");
+            setNewProjectCount((c) => c + 1);
 
         } else {
 
