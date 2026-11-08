@@ -2,8 +2,9 @@
 synopsis/
 applicationDesign/*
 
-# Ref video
+# Optional Files
 RefVideo/
+KI.md
 
 # inference engine
 .ipynb_checkpoints/
