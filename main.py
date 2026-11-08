@@ -22,8 +22,13 @@ from backend.resourcesManagement import (
     get_file_credentials,
     inverse_file_status,
 )
-from contextlib import asynccontextmanager
-import asyncio, os
+from contextlib import asynccontextmanager, suppress
+import asyncio, os, logging
+
+from fastapi import WebSocket, WebSocketDisconnect
+from starlette.websockets import WebSocketState
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -244,30 +249,85 @@ async def download_progress(websocket: WebSocket, download_id: str):
     await websocket.accept()
 
     manager = app.state.download_manager
+    disconnected = asyncio.Event()
+
+    async def monitor_disconnect():
+        try:
+            while True:
+                message = await websocket.receive()
+
+                if message["type"] == "websocket.disconnect":
+                    disconnected.set()
+                    return
+
+        except WebSocketDisconnect:
+            disconnected.set()
+
+    disconnect_task = asyncio.create_task(monitor_disconnect())
 
     try:
-        while True:
+        while not disconnected.is_set():
+
             status = manager.get_status(download_id)
 
             if status is None:
-                await websocket.send_json({"error": "Download not found"})
+                await websocket.send_json({
+                    "error": "Download not found"
+                })
                 break
 
-            # Remove unnecessary fields before sending.
-            status.pop("error", None) if status["error"] is None else None
+            # Avoid modifying the download manager's original status.
+            status = dict(status)
+
+            if status.get("error") is None:
+                status.pop("error", None)
 
             await websocket.send_json(status)
 
-            if status["status"] in ("completed", "failed", "cancelled"):
+            if status["status"] in (
+                "completed",
+                "failed",
+                "cancelled"
+            ):
                 break
 
-            await asyncio.sleep(0.5)
+            try:
+                await asyncio.wait_for(
+                    disconnected.wait(),
+                    timeout=0.5
+                )
+            except asyncio.TimeoutError:
+                pass
+
+    except WebSocketDisconnect:
+        disconnected.set()
+
+    except (OSError, RuntimeError):
+        disconnected.set()
+        logger.warning(
+            "WebSocket disconnected for download %s",
+            download_id
+        )
 
     except Exception:
-        pass
+        logger.exception(
+            "Download progress WebSocket error: %s",
+            download_id
+        )
 
     finally:
-        await websocket.close()
+        disconnect_task.cancel()
+
+        with suppress(asyncio.CancelledError):
+            await disconnect_task
+
+        # Close only if both sides still consider the connection open.
+        if (
+            not disconnected.is_set()
+            and websocket.client_state == WebSocketState.CONNECTED
+            and websocket.application_state == WebSocketState.CONNECTED
+        ):
+            await websocket.close()
 
 
 @app.get("/downloads")

@@ -119,7 +119,9 @@ export default function ListModels({ modelsManifest, setNeedToRefresh }) {
                 });
 
             } catch (error) {
-                console.error("Failed to restore downloads:", error);
+                if (isMounted) {
+                    console.error("Failed to restore downloads:", error);
+                }
             }
         }
 
@@ -127,25 +129,6 @@ export default function ListModels({ modelsManifest, setNeedToRefresh }) {
 
         return () => {
             isMounted = false;
-
-            Object.values(sockets.current).forEach(socket => {
-
-                if (socket.readyState === WebSocket.CONNECTING) {
-
-                    // Wait until connection is established, then close it.
-                    socket.addEventListener(
-                        "open",
-                        () => socket.close(),
-                        { once: true }
-                    );
-
-                } else if (socket.readyState === WebSocket.OPEN) {
-                    socket.close();
-                }
-
-            });
-
-            sockets.current = {};
         };
 
     }, [portNumber, startTracking]);
