@@ -634,6 +634,9 @@ class WhisperDecoder(torch.nn.Module):
 
 
 class WhisperSmall(torch.nn.Module):
+    """
+    Whisper Small accepts mono audio clips up to 30 seconds long.
+    """
 
     def __init__(self, config: dict, safetensor_files: list[str]):
         super().__init__()

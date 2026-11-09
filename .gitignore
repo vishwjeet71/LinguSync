@@ -15,6 +15,8 @@ inference_engine/my_models/modelPrompt
 # SST
 inference_engine/STT/whisper_small/model.safetensors
 inference_engine/STT/SttInput.mp3
+input_example_0.mp3
+input_example_1.wav
 
 # MT
 inference_engine/MT/facebook-nllb-200-1 3B/pytorch_model.bin
