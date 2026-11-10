@@ -5,7 +5,7 @@
 import torch
 from safetensors import safe_open
 
-from backend.models.stt.whisperProcessing import *
+from backend.models.stt.whisperSmallProcessing import *
 
 
 class WhisperEncoderAttention(torch.nn.Module):
