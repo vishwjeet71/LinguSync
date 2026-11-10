@@ -5,6 +5,8 @@
 import torch
 from safetensors import safe_open
 
+from backend.models.stt.whisperProcessing import *
+
 
 class WhisperEncoderAttention(torch.nn.Module):
     def __init__(self, config: dict, layer_no: int, safetensor_files: list):
@@ -635,7 +637,8 @@ class WhisperDecoder(torch.nn.Module):
 
 class WhisperSmall(torch.nn.Module):
     """
-    Whisper Small accepts mono audio clips up to 30 seconds long.
+    Whisper Small is a lightweight STT model with approximately 244 million parameters.
+    Officially, it supports mono audio clips of up to 30 seconds.
     """
 
     def __init__(self, config: dict, safetensor_files: list[str]):
@@ -773,59 +776,98 @@ class WhisperSmall(torch.nn.Module):
     @torch.no_grad()
     def forward(
         self,
-        x,
+        audio_path: str,
         lang_id: int = 50259,
         task_id: int = 50359,
         return_timestamps: bool = False,
+        device: torch.device = torch.device("cpu"),
     ):
         """
-        lang: <|en|> : 50259
-        task: <|transcribe|>: 50359, <|translate|> : 50358
+        Transcribe a single audio file at a time.
+
+        NOTE: The model now supports audio inputs longer than 30 seconds.
+            However, timestamp generation has not yet been implemented,
+            causing timestamps to restart after every 30 seconds.
+
+        Parameters
+        ----------
+        audio_file : str
+            Path to the input audio file.
+
+        lang : str
+            Language code specifying the language of the audio.
+            Refer to the official Hugging Face model repository for
+            the complete list of supported language codes.
+
+            Example: <|en|> : 50259
+
+        task : str
+            Specifies the transcription task:
+            - "transcribe": Transcribe the audio in its original language.
+            - "translate": Translate the audio into English.
+
+            <|transcribe|> : 50359
+            <|translate|>  : 50358
+
+        device : str, default="cpu"
+            Device on which the model will perform inference.
+            Use "cuda" for GPU acceleration or "cpu" for CPU processing.
+
+        return_timestamps : bool, default=False
+            Whether to include timestamps in the transcription output.
         """
-        encoder_output = self.encoder(x)
 
-        prompt = [
-            self.decoder_start_token_id,
-            lang_id,
-            task_id,
-        ]
+        transcribe_tokens = []
 
-        if not return_timestamps:
-            prompt.append(self.no_timestamps_token_id)
+        for chunk in split_audio(audio_path):
 
-        decoder_input = torch.tensor([prompt], device=x.device)
+            generated_tokens = []
 
-        self.decoder.clean_cache()
+            x = log_mel_spectrogram(pad_or_trim(chunk), device=device)
 
-        generated_tokens = []
+            encoder_output = self.encoder(x)
 
-        for _ in range(self.max_length):
+            prompt = [
+                self.decoder_start_token_id,
+                lang_id,
+                task_id,
+            ]
 
-            decoder_output = self.decoder(decoder_input, encoder_output)
+            if not return_timestamps:
+                prompt.append(self.no_timestamps_token_id)
 
-            logits = decoder_output @ self.back_proj.weight.T
+            decoder_input = torch.tensor([prompt], device=x.device)
 
-            if return_timestamps:
-                next_logits = self.apply_timestamp_rules(logits, generated_tokens)
-            else:
-                next_logits = logits[:, -1, :].clone()
+            self.decoder.clean_cache()
 
-                # Prevent timestamp generation
-                next_logits[:, self.timestamp_begin :] = -float("inf")
+            for _ in range(self.max_length):
 
-            predicted_token = torch.argmax(next_logits, dim=-1).item()
+                decoder_output = self.decoder(decoder_input, encoder_output)
 
-            if predicted_token == self.eos_token_id:
-                break
+                logits = decoder_output @ self.back_proj.weight.T
 
-            generated_tokens.append(predicted_token)
+                if return_timestamps:
+                    next_logits = self.apply_timestamp_rules(logits, generated_tokens)
+                else:
+                    next_logits = logits[:, -1, :].clone()
 
-            decoder_input = torch.tensor(
-                [[predicted_token]],
-                device=decoder_output.device,
-            )
+                    # Prevent timestamp generation
+                    next_logits[:, self.timestamp_begin :] = -float("inf")
 
-        return generated_tokens
+                predicted_token = torch.argmax(next_logits, dim=-1).item()
+
+                if predicted_token == self.eos_token_id:
+                    break
+
+                generated_tokens.append(predicted_token)
+                transcribe_tokens.append(predicted_token)
+
+                decoder_input = torch.tensor(
+                    [[predicted_token]],
+                    device=decoder_output.device,
+                )
+
+        return transcribe_tokens
 
     def get_tensor(self, name):
 
