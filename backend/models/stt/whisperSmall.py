@@ -4,6 +4,7 @@
 
 import torch
 from safetensors import safe_open
+from tokenizers import Tokenizer
 
 from backend.models.stt.whisperSmallProcessing import *
 
@@ -637,14 +638,32 @@ class WhisperDecoder(torch.nn.Module):
 
 class WhisperSmall(torch.nn.Module):
     """
-    Whisper Small is a lightweight STT model with approximately 244 million parameters.
-    Officially, it supports mono audio clips of up to 30 seconds.
+    Whisper Small is a lightweight speech-to-text (STT) model with approximately
+    244 million parameters. It officially supports mono audio clips of up to
+    30 seconds in duration.
+
+    Parameters
+    ----------
+    config : dict
+        Official configuration dictionary of the model.
+
+    tokenizer : str
+        Path to the directory containing the model's tokenizer files.
+
+    safetensor_files : list
+        List of paths to the model's weight files in SafeTensors format.
+
+    Returns
+    -------
+    str
+        Transcription of the input audio as a string.
     """
 
-    def __init__(self, config: dict, safetensor_files: list[str]):
+    def __init__(self, config: dict, tokenizer: str, safetensor_files: list[str]):
         super().__init__()
 
         self.model_config = config
+        self.tk = Tokenizer.from_file(tokenizer)
 
         self.bos_token_id = config["bos_token_id"]
         self.decoder_start_token_id = config["decoder_start_token_id"]
@@ -781,7 +800,7 @@ class WhisperSmall(torch.nn.Module):
         task_id: int = 50359,
         return_timestamps: bool = False,
         device: torch.device = torch.device("cpu"),
-    ):
+    ) -> str:
         """
         Transcribe a single audio file at a time.
 
@@ -867,7 +886,7 @@ class WhisperSmall(torch.nn.Module):
                     device=decoder_output.device,
                 )
 
-        return transcribe_tokens
+        return self.tk.decode(transcribe_tokens)
 
     def get_tensor(self, name):
 
