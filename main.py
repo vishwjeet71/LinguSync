@@ -1,32 +1,38 @@
-from fastapi import FastAPI, Response, status, HTTPException, WebSocket
-from fastapi.middleware.cors import CORSMiddleware
-
-# Input Data validation & other
-from pydantic import BaseModel
+# Standard Library
+import asyncio
+import logging
+import os
+import gc
+from contextlib import asynccontextmanager, suppress
 from datetime import datetime
-from typing import Optional
 
-# Data base
-from backend.appDataBase.ApplicationSql import (
-    app_data_path,
-    sql_path,
-    load_data_from_sql,
-    add_sql_data,
-    fetch_record,
-    remove_record,
+# Third-party Libraries
+from fastapi import (
+    FastAPI,
+    Response,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
 )
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from starlette.websockets import WebSocketState
 
-# Downloading Manager
+# Local Application Imports
+from backend.appDataBase.ApplicationSql import (
+    add_sql_data,
+    app_data_path,
+    fetch_record,
+    load_data_from_sql,
+    remove_record,
+    sql_path,
+)
 from backend.resourcesManagement import (
     DownloadManager,
     get_file_credentials,
     inverse_file_status,
 )
-from contextlib import asynccontextmanager, suppress
-import asyncio, os, logging
-
-from fastapi import WebSocket, WebSocketDisconnect
-from starlette.websockets import WebSocketState
+from backend.modelsProcessing import TranslationPipeline
 
 logger = logging.getLogger(__name__)
 
@@ -34,8 +40,10 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.download_manager = DownloadManager(str(app_data_path))
+    app.state.pipeline = TranslationPipeline()
     yield
     await app.state.download_manager.close()
+    await app.state.pipeline.close()
 
 
 app = FastAPI(
@@ -271,9 +279,7 @@ async def download_progress(websocket: WebSocket, download_id: str):
             status = manager.get_status(download_id)
 
             if status is None:
-                await websocket.send_json({
-                    "error": "Download not found"
-                })
+                await websocket.send_json({"error": "Download not found"})
                 break
 
             # Avoid modifying the download manager's original status.
@@ -284,18 +290,11 @@ async def download_progress(websocket: WebSocket, download_id: str):
 
             await websocket.send_json(status)
 
-            if status["status"] in (
-                "completed",
-                "failed",
-                "cancelled"
-            ):
+            if status["status"] in ("completed", "failed", "cancelled"):
                 break
 
             try:
-                await asyncio.wait_for(
-                    disconnected.wait(),
-                    timeout=0.5
-                )
+                await asyncio.wait_for(disconnected.wait(), timeout=0.5)
             except asyncio.TimeoutError:
                 pass
 
@@ -304,16 +303,10 @@ async def download_progress(websocket: WebSocket, download_id: str):
 
     except (OSError, RuntimeError):
         disconnected.set()
-        logger.warning(
-            "WebSocket disconnected for download %s",
-            download_id
-        )
+        logger.warning("WebSocket disconnected for download %s", download_id)
 
     except Exception:
-        logger.exception(
-            "Download progress WebSocket error: %s",
-            download_id
-        )
+        logger.exception("Download progress WebSocket error: %s", download_id)
 
     finally:
         disconnect_task.cancel()
@@ -343,3 +336,8 @@ async def remove_project(
 ):  # Initial Project Cleanup Logic
     # Remove all temporary data generated during input processing.
     return remove_record(row_id=projectId, response=response)
+
+
+@app.post("/translate/{project_id}")
+async def run_translation_pipeline(project_id: int, response: Response):
+    pass
