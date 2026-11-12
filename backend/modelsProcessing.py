@@ -65,7 +65,7 @@ class TranslationPipeline:
             "id": task_id,
             "hardware": self.ht,
             "current_working_task": None,  # stt, mt, tts, done
-            "status": "starting process...",
+            "status": "idel",
             "task": task,
             "error": None,
         }
@@ -78,37 +78,50 @@ class TranslationPipeline:
         self, task_id: str, input_audio_path: str, project_dir: str = None
     ):
 
-        if self.ht == "e":
+        if self.ht == "p":
+            logger.info(
+                "Performance model integration is not supported yet. Falling back to the efficient model."
+            )
 
-            self.translation_tasks[task_id]["current_working_task"] = "stt"
-
-            try:
-
-                self.translation_tasks[task_id]["status"] = "Extracting Transcript..."
-                model = self._call_whisper_small()
-                stt_status = save_transcript(
-                    script=model(audio_path=input_audio_path, device=self.device),
-                    save_dir=project_dir,
-                )
-                if not stt_status:
-                    logger.warning(
-                        f"Unable to save the transcipt in project dir {project_dir}"
-                    )
-                    raise Exception(
-                        f"Unable to save the transcipt in project dir {project_dir}"
-                    )
-
-                logger.info(f"Transcript save in {project_dir}")
-
-            except Exception as sttError:
-                self.translation_tasks[task_id]["error"] = sttError
-
-        elif self.ht == "p":
-            ...
-
-        else:
+        if self.ht not in ("e", "p"):
             logger.error(f"Invalid Hardware configuration! {self.ht}")
             raise ValueError(f"Invalid Hardware configuration! {self.ht}")
+
+        self.translation_tasks[task_id]["current_working_task"] = "stt"
+
+        try:
+
+            self.translation_tasks[task_id]["status"] = "Extracting Transcript..."
+            model = self._call_whisper_small()
+            stt_status = save_transcript(
+                script=model(audio_path=input_audio_path, device=self.device),
+                save_dir=project_dir,
+            )
+
+            del model
+
+            if not stt_status:
+                logger.warning(
+                    f"Unable to save the transcipt in project dir {project_dir}"
+                )  # Stop task execution; no further processing will be performed.
+
+                self.translation_tasks[task_id]["status"] = "failed"
+                self.translation_tasks[task_id][
+                    "error"
+                ] = "Unable to save transcription file."
+
+            logger.info(f"Transcript save in {project_dir}")
+
+        except Exception as sttError:
+            self.translation_tasks[task_id]["status"] = "failed"
+            self.translation_tasks[task_id]["error"] = sttError
+
+    async def cancle_task(self, task_id: str):
+        logger.warning("Task cancellation functionality has not been implemented yet.")
+        return None
+
+    def get_task_details(self, task_id):
+        return self.translation_tasks.get(task_id)
 
     def _call_whisper_small(self):
 
@@ -126,9 +139,6 @@ class TranslationPipeline:
             tokenizer=toknizer_path,
             safetensor_files=[model_weight_path],
         ).to(self.device)
-
-    def get_task_details(self, task_id):
-        return self.translation_tasks.get(task_id)
 
     async def close(self):
         logger.info("Shutting down Translation Pipeline...")

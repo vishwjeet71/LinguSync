@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.download_manager = DownloadManager(str(app_data_path))
-    app.state.pipeline = TranslationPipeline()
+    app.state.pipeline = TranslationPipeline(str(app_data_path))
     yield
     await app.state.download_manager.close()
     await app.state.pipeline.close()
@@ -340,4 +340,27 @@ async def remove_project(
 
 @app.post("/translate/{project_id}")
 async def run_translation_pipeline(project_id: int, response: Response):
-    pass
+
+    # Use hardcoded input for integration testing.
+    input_audio_path = "/home/vishwjeet/Desktop/Projects/LinguSync/input_example_1.wav"
+    project_dir = "/home/vishwjeet/Downloads/"
+
+    translation_process = app.state.pipeline
+
+    task_id = await translation_process.create_task(input_audio_path, project_dir)
+
+    return task_id
+
+
+@app.post("/translate/task/get/{task_id}")
+async def task_details(task_id: str, response: Response):
+    translation_process = app.state.pipeline
+
+    return translation_process.get_task_details(task_id)
+
+
+@app.post("/translate/task/cancle/{task_id}")
+async def stop_translation(task_id: str, response: Response):
+    translation_process = app.state.pipeline
+
+    return translation_process.cancle_task(task_id)
