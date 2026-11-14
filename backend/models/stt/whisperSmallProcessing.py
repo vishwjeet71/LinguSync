@@ -4,6 +4,9 @@ import os
 from math import gcd
 from functools import lru_cache
 from typing import Optional, Union
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 import numpy as np
@@ -188,8 +191,8 @@ def save_transcript(
 
     Returns
     -------
-    bool
-        Indicates whether the file-saving operation was successful (True) or failed (False).
+    str
+        Path to the saved transcript file.
     """
 
     try:
@@ -202,8 +205,8 @@ def save_transcript(
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(script)
 
-        return True
+        return file_path
 
     except Exception as E:
-        print(f"Error: {E}")
-        return False
+        logger.error(E)
+        return None
