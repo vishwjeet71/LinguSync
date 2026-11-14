@@ -8,6 +8,7 @@ import torch
 
 
 class SinusoidalPositionalEmbedding(torch.nn.Module):
+    """ "Sinusoidal positional encoding."""
 
     def __init__(
         self,
@@ -236,6 +237,7 @@ class EncoderLayer(torch.nn.Module):
 
 
 class NllbEncoder(torch.nn.Module):
+    """NLLB encoder architecture."""
 
     def __init__(self, config: dict, state_dict: dict):
         super().__init__()
@@ -528,7 +530,8 @@ class DecoderLayer(torch.nn.Module):
         return residual + self.ffn(self.ln3(x)), present_kv
 
 
-class nllbDecoder(torch.nn.Module):
+class NllbDecoder(torch.nn.Module):
+    """NLLB decoder architecture."""
 
     def __init__(self, config: dict, state_dict: dict):
         super().__init__()
@@ -597,19 +600,56 @@ class nllbDecoder(torch.nn.Module):
 
 
 class EncoderDecoder:
+    """
+    The encoder-decoder architecture allows the model to avoid loading the
+    entire model into memory at once during inference. Instead, it splits
+    the model into separate encoder and decoder components, allowing them
+    to be loaded independently as needed.
+
+    Parameters
+    ----------
+    config : dict
+        Official configuration dictionary of the model.
+
+    state_dict : dict
+        Path to the model weights file.
+    """
 
     def __init__(self, config: dict, state_dict: dict):
         self.config = config
         self.sd = state_dict
 
-    def get_encoder(self):
-        return NllbEncoder(self.config, self.sd)
+    def get_encoder(self, device: torch.device = torch.device("cpu")):
+        """Returns the encoder on the specified device."""
+        return NllbEncoder(self.config, self.sd).to(device)
 
-    def get_decoder(self):
-        return nllbDecoder(self.config, self.sd)
+    def get_decoder(self, device: torch.device = torch.device("cpu")):
+        """Returns the decoder on the specified device."""
+        return NllbDecoder(self.config, self.sd).to(device)
 
 
 class FacebookNllb(torch.nn.Module):
+    """
+    NLLB is a machine translation model developed by Meta that supports over 200 languages.
+    The 1.3B variant contains 1.3 billion parameters.
+    It takes a text string in the source language and translates it into the target language.
+
+    Visit the following link to see the list of supported languages:
+    https://huggingface.co/facebook/nllb-200-1.3B/blob/main/special_tokens_map.json
+
+    Parameters
+    ----------
+    config : dict
+        Path to the official model configuration file.
+
+    state_dict : dict
+        Path to the model weights file (.bin).
+
+    Returns
+    -------
+    str
+        The translated transcript in the target language.
+    """
 
     def __init__(self, config: dict, state_dict: dict):
         super().__init__()
@@ -620,7 +660,36 @@ class FacebookNllb(torch.nn.Module):
         self.eos_id = config["eos_token_id"]
 
     @torch.inference_mode()
-    def forward(self, x, target_lang_id: int) -> list:
+    def forward(
+        self,
+        source_txt: str,
+        target_lang_id: int,
+        device: torch.device = torch.device("cpu"),
+    ) -> str:
+        """
+        Translates the given transcript into the target language.
+        Processes one transcript at a time.
+
+        Parameters
+        ----------
+        source_txt : str
+            Path to the source language text file.
+
+        target_lang_id : int
+            Language ID/code of the target language into which the
+            input transcript will be translated.
+
+        device : torch.device, default="cpu"
+            Device on which the model performs inference.
+            Use "cuda" for GPU acceleration or "cpu" for CPU processing.
+
+        Returns
+        -------
+        str
+            Translated transcript.
+        """
+
+        x = None  # For Now settin input = None
 
         model = self.blocks.get_encoder().to(x.device)
         encoder_output = model(x)
