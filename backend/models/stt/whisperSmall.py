@@ -796,7 +796,7 @@ class WhisperSmall(torch.nn.Module):
     def forward(
         self,
         audio_path: str,
-        lang_id: int = 50259,
+        language_token: str = "<|hi|>",
         task_id: int = 50359,
         return_timestamps: bool = False,
         device: torch.device = torch.device("cpu"),
@@ -813,12 +813,12 @@ class WhisperSmall(torch.nn.Module):
         audio_file : str
             Path to the input audio file.
 
-        lang : str
+        language_token : str
             Language code specifying the language of the audio.
             Refer to the official Hugging Face model repository for
-            the complete list of supported language codes.
+            the complete list of supported language tokens.
 
-            Example: <|en|> : 50259
+            Example: <|hi|>
 
         task : str
             Specifies the transcription task:
@@ -837,6 +837,10 @@ class WhisperSmall(torch.nn.Module):
         """
 
         transcribe_tokens = []
+        lang_id = self.tk.token_to_id(language_token)
+
+        if not lang_id:
+            raise ValueError(f"Invalid Language token or Id Token: {language_token}, Id:{lang_id}")
 
         for chunk in split_audio(audio_path):
 
