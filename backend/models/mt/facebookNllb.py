@@ -5,6 +5,9 @@
 import math
 
 import torch
+from tokenizers import Tokenizer
+
+from backend.models.mt.facebookNllbProcessing import load_transcript_file
 
 
 class SinusoidalPositionalEmbedding(torch.nn.Module):
@@ -631,7 +634,7 @@ class EncoderDecoder:
 class FacebookNllb(torch.nn.Module):
     """
     NLLB is a machine translation model developed by Meta that supports over 200 languages.
-    The 1.3B variant contains 1.3 billion parameters.
+    this variant contains 1.3 billion parameters.
     It takes a text string in the source language and translates it into the target language.
 
     Visit the following link to see the list of supported languages:
@@ -642,6 +645,9 @@ class FacebookNllb(torch.nn.Module):
     config : dict
         Path to the official model configuration file.
 
+    tokenizer: dict
+        Path to the model toknizer file.
+
     state_dict : dict
         Path to the model weights file (.bin).
 
@@ -651,10 +657,11 @@ class FacebookNllb(torch.nn.Module):
         The translated transcript in the target language.
     """
 
-    def __init__(self, config: dict, state_dict: dict):
+    def __init__(self, config: dict, tokenizer: dict, state_dict: dict):
         super().__init__()
 
         self.blocks = EncoderDecoder(config, state_dict)
+        self.tk = Tokenizer.from_file(tokenizer)
         self.max_length = config["max_length"]
         self.bos_id = config["decoder_start_token_id"]
         self.eos_id = config["eos_token_id"]
@@ -663,7 +670,8 @@ class FacebookNllb(torch.nn.Module):
     def forward(
         self,
         source_txt: str,
-        target_lang_id: int,
+        source_lang_token: str = "hin_Deva",
+        target_lang_token: str = "eng_Latn",
         device: torch.device = torch.device("cpu"),
     ) -> str:
         """
@@ -673,11 +681,15 @@ class FacebookNllb(torch.nn.Module):
         Parameters
         ----------
         source_txt : str
-            Path to the source language text file.
+            Path to the source-language text file.
 
-        target_lang_id : int
-            Language ID/code of the target language into which the
-            input transcript will be translated.
+        source_lang_token : str, default="hin_Deva"
+            Language token representing the source language.
+            Hindi is the default source language.
+
+        target_lang_token : str, default="eng_Latn"
+            Language token representing the target language.
+            English is the default target language.
 
         device : torch.device, default="cpu"
             Device on which the model performs inference.
@@ -689,16 +701,29 @@ class FacebookNllb(torch.nn.Module):
             Translated transcript.
         """
 
-        x = None  # For Now settin input = None
+        src_lang_id = self.tk.token_to_id(source_lang_token)
+        target_lang_id = self.tk.token_to_id(target_lang_token)
 
-        model = self.blocks.get_encoder().to(x.device)
+        if src_lang_id is None or target_lang_id is None:
+            raise ValueError(
+                f"Invalid language IDs, source: {src_lang_id} | target: {target_lang_id}"
+            )
+
+        transcript = load_transcript_file(source_txt)
+
+        input_ids = [src_lang_id] + self.tk.encode(transcript).ids + [self.eos_id]
+        print("Input ids:", input_ids)
+        print("type of the input ids:", type(input_ids))
+        x = torch.tensor([input_ids], device=device)
+
+        model = self.blocks.get_encoder(device)
         encoder_output = model(x)
 
         model.cpu()
         del model
         torch.cuda.empty_cache()
 
-        model = self.blocks.get_decoder().to(x.device)
+        model = self.blocks.get_decoder(device)
         model.clear_kv_cache()
 
         decoder_input = self.bos_id
@@ -719,4 +744,4 @@ class FacebookNllb(torch.nn.Module):
             predicted_seq.append(predicted_token)
             decoder_input = predicted_token
 
-        return predicted_seq
+        return self.tk.decode(predicted_seq)
