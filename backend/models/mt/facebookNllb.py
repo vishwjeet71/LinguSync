@@ -11,7 +11,7 @@ from backend.models.mt.facebookNllbProcessing import load_transcript_file
 
 
 class SinusoidalPositionalEmbedding(torch.nn.Module):
-    """ "Sinusoidal positional encoding."""
+    """Sinusoidal positional encoding."""
 
     def __init__(
         self,
@@ -645,7 +645,7 @@ class FacebookNllb(torch.nn.Module):
     config : dict
         Path to the official model configuration file.
 
-    tokenizer: dict
+    tokenizer: str
         Path to the model toknizer file.
 
     state_dict : dict
@@ -657,7 +657,7 @@ class FacebookNllb(torch.nn.Module):
         The translated transcript in the target language.
     """
 
-    def __init__(self, config: dict, tokenizer: dict, state_dict: dict):
+    def __init__(self, config: dict, tokenizer: str, state_dict: dict):
         super().__init__()
 
         self.blocks = EncoderDecoder(config, state_dict)
@@ -712,8 +712,6 @@ class FacebookNllb(torch.nn.Module):
         transcript = load_transcript_file(source_txt)
 
         input_ids = [src_lang_id] + self.tk.encode(transcript).ids + [self.eos_id]
-        print("Input ids:", input_ids)
-        print("type of the input ids:", type(input_ids))
         x = torch.tensor([input_ids], device=device)
 
         model = self.blocks.get_encoder(device)

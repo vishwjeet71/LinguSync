@@ -1,9 +1,11 @@
-import json, uuid, os, asyncio
+import json, uuid, os, asyncio, gc
 import logging, torch
 from typing import Literal
 
 from backend.models.stt.whisperSmall import WhisperSmall
 from backend.models.stt.whisperSmallProcessing import save_transcript
+from backend.models.mt.facebookNllb import FacebookNllb
+from backend.models.mt.facebookNllbProcessing import save_translation
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +51,8 @@ class TranslationPipeline:
         self.nllb_dir = os.path.join(self.sys_models_dir, "nllb-200-1.3B")
         self.OuteTTS = os.path.join(self.sys_models_dir, "OuteTTS-0.2-500M")
 
+        self.model = None
+
     async def create_task(self, input_audio_path: str = None, project_dir: str = None):
 
         if not os.path.exists(input_audio_path):
@@ -75,7 +79,12 @@ class TranslationPipeline:
         return task_id
 
     async def _run_pipeline(
-        self, task_id: str, input_audio_path: str, project_dir: str = None
+        self,
+        task_id: str,
+        input_audio_path: str,
+        project_dir: str = None,
+        source_lang_token: str = "hin_Deva",
+        target_lang_token: str = "eng_Latn",
     ):
 
         if self.ht == "p":
@@ -87,21 +96,25 @@ class TranslationPipeline:
             logger.error(f"Invalid Hardware configuration! {self.ht}")
             raise ValueError(f"Invalid Hardware configuration! {self.ht}")
 
-        self.translation_tasks[task_id]["current_working_task"] = "stt"
+        self.translation_tasks[task_id]["current_working_task"] = "Speech-to-Text"
 
         try:
 
-            self.translation_tasks[task_id]["status"] = "Extracting Transcript..."
-            model = self._call_whisper_small()
-            stt_status = save_transcript(
-                script=model(audio_path=input_audio_path, device=self.device),
-                save_dir=project_dir,
+            self.translation_tasks[task_id]["status"] = "Loading STT Model..."
+            self._call_whisper_small()
+            logger.info(
+                f"Whisper model loaded successfully on '{self.device.type}' and is ready for inference."
             )
 
-            del model
+            self.translation_tasks[task_id]["status"] = "Extracting Transcript..."
+            transcript_saved_location = save_transcript(
+                script=self.model(audio_path=input_audio_path, device=self.device),
+                save_dir=project_dir,
+            )
+            self._clear_model_space()
 
-            if not stt_status:
-                logger.warning(
+            if not transcript_saved_location:
+                logger.error(
                     f"Unable to save the transcipt in project dir {project_dir}"
                 )  # Stop task execution; no further processing will be performed.
 
@@ -109,12 +122,54 @@ class TranslationPipeline:
                 self.translation_tasks[task_id][
                     "error"
                 ] = "Unable to save transcription file."
-
             logger.info(f"Transcript save in {project_dir}")
 
+            self.translation_tasks[task_id][
+                "current_working_task"
+            ] = "Machine-Translaton"
+            self.translation_tasks[task_id]["status"] = "Loading MT Model..."
+            self._call_meta_nllb()
+            logger.info(
+                f"Meta-Nllb model loaded successfully on '{self.device.type}' and is ready for inference."
+            )
+
+            self.translation_tasks[task_id]["status"] = "Translating Transcript..."
+            translation_saved_location = save_translation(
+                translation=self.model(
+                    source_txt=transcript_saved_location,
+                    source_lang_token=source_lang_token,
+                    target_lang_token=target_lang_token,
+                    device=self.device,
+                ),
+                save_dir=project_dir,
+            )
+            self._clear_model_space()
+
+            if not translation_saved_location:
+                logger.error(
+                    f"Unable to save the translation in project dir {project_dir}"
+                )
+                self.translation_tasks[task_id]["status"] = "failed"
+                self.translation_tasks[task_id][
+                    "error"
+                ] = "Unable to save translation file."
+
+            logger.info(f"Translation save in {project_dir}")
+
         except Exception as sttError:
+            logger.error(sttError)
             self.translation_tasks[task_id]["status"] = "failed"
             self.translation_tasks[task_id]["error"] = sttError
+            self._clear_model_space()
+
+    def _clear_model_space(self):
+
+        if self.device.type == "cuda":
+            torch.cuda.empty_cache()
+
+        del self.model
+        self.model = None
+        gc.collect()
 
     async def cancle_task(self, task_id: str):
         logger.warning("Task cancellation functionality has not been implemented yet.")
@@ -134,10 +189,28 @@ class TranslationPipeline:
                 logger.error(f"Path not Exist {p}")
                 raise FileNotFoundError(f"Unable to locate path {p}")
 
-        return WhisperSmall(
+        self.model = WhisperSmall(
             config=json.load(open(config_path)),
             tokenizer=toknizer_path,
             safetensor_files=[model_weight_path],
+        ).to(self.device)
+
+    def _call_meta_nllb(self):
+        config_path = os.path.join(self.nllb_dir, "config.json")
+        toknizer_path = os.path.join(self.nllb_dir, "tokenizer.json")
+        model_weight_path = os.path.join(self.nllb_dir, "pytorch_model.bin")
+
+        for p in [config_path, toknizer_path, model_weight_path]:
+            if not os.path.exists(p):
+                logger.error(f"Path not Exist {p}")
+                raise FileNotFoundError(f"Unable to locate path {p}")
+
+        self.model = FacebookNllb(
+            config=json.load(open(config_path)),
+            tokenizer=toknizer_path,
+            state_dict=torch.load(
+                model_weight_path, map_location="cpu", mmap=True, weights_only=True
+            ),
         ).to(self.device)
 
     async def close(self):
