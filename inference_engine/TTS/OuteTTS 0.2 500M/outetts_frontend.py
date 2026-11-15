@@ -1,6 +1,9 @@
-import json
+import json, os
 import re
 import wave
+import logging
+
+logger = logging.getLogger(__name__)
 
 import numpy as np
 import torch
@@ -204,3 +207,33 @@ def decode_codes_to_wav(codes: list[int], decoder) -> torch.Tensor:
     return decoder(
         torch.tensor([codes], dtype=torch.long)
     )  # [1, len(codes)*320] @ 24 kHz
+
+
+def load_translation_file(file_location: str):
+    """
+    Read a translation file from disk and return its contents as a string.
+
+    Parameters
+    ----------
+    file_location : str
+        Path to the file.
+
+    Returns
+    -------
+    str
+        Translation content as a single string.
+    """
+
+    try:
+
+        if not os.path.exists(file_location):
+            raise FileNotFoundError(f"Translation not found at {file_location}")
+
+        with open(file_location, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        return content
+
+    except Exception as e:
+        logger.error(e)
+        return None

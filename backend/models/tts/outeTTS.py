@@ -4,10 +4,13 @@
 
 import torch
 from safetensors import safe_open
-from tokenizers import Tokenizer
+
+from backend.models.tts.outeTTSProcessing import *
 
 
 class OutettsAttention(torch.nn.Module):
+    """OuteTTS attention module."""
+
     def __init__(self, config: dict, layer_no: int, safetensor_files: list):
         super().__init__()
 
@@ -182,6 +185,7 @@ class OutettsAttention(torch.nn.Module):
 
 
 class OutettsFeedForwardNetwork(torch.nn.Module):
+    """OuteTTS feed-forward network module."""
 
     def __init__(self, config: dict, layer_no: int, safetensor_files: list):
         super().__init__()
@@ -230,6 +234,7 @@ class OutettsFeedForwardNetwork(torch.nn.Module):
 
 
 class OutettsDecoderLayer(torch.nn.Module):
+    """Single OuteTTS decoder layer."""
 
     def __init__(self, config: dict, layer_no: int, safetensor_files: list):
         super().__init__()
@@ -271,9 +276,46 @@ class OutettsDecoderLayer(torch.nn.Module):
 
 
 class Outetts(torch.nn.Module):
+    """
+    OuteTTS is a text-to-speech model capable of generating speech in four languages:
+    English, Korean, Chinese, and Japanese.
 
-    def __init__(self, config: dict, safetensor_files: list[str]):
+    This 500-million-parameter model takes a text file containing a script written
+    in one of its supported languages and generates speech in the selected speaker's voice.
+
+    Parameters
+    ----------
+    tokenizer_path : str
+        Path to the model's official tokenizer file.
+
+    config : dict
+        Model configuration loaded from the configuration JSON file.
+
+    safetensor_files : list[str]
+        List of paths to the model's weight files.
+
+    speaker_location : str
+        Path to the speaker profile containing the voice characteristics to use
+        for speech generation.
+
+    NOTE The script language and the speaker's language must match.
+
+    Returns
+    -------
+    list
+        Generated speech codes.
+    """
+
+    def __init__(
+        self,
+        tokenizer_path: str,
+        config: dict,
+        safetensor_files: list[str],
+        speaker_location: str,
+    ):
         super().__init__()
+
+        self.tok = OuteTokenizer(tokenizer_path)
 
         self.num_layers = config["num_hidden_layers"]
         self.stop_ids = config["eos_token_id"]
@@ -303,23 +345,48 @@ class Outetts(torch.nn.Module):
         )
         self.final_norm.weight.data.copy_(self.get_tensor("model.norm.weight"))
 
+        self.speaker = load_speaker(speaker_location)
+
     @torch.inference_mode()
     def forward(
         self,
-        prompt_ids: list[int],
+        script_path: str,
         max_length: int = 4096,
         temperature: float = 0.1,
         repetition_penalty: float = 1.1,
         top_k: int = 50,
         top_p: float = 1.0,
         min_p: float = 0.0,
-        seed: int | None = None,
+        seed: int = 0,
     ) -> list[int]:
+        """
+        Generate speech codes from a script using the selected speaker's voice.
+
+        Parameters
+        ----------
+        script_path : str
+            Path to the text file containing the script in a supported language.
+
+        max_length : int, default=4096
+            Maximum number of tokens the model can generate.
+
+        Returns
+        -------
+        list
+            Generated speech tokens.
+        """
+
+        script_content = load_translation_file(script_path)
+
+        if not script_content:
+            raise ValueError(f"Invalid translation content received: {script_content}.")
+
+        prompt_ids = self.tok.encode_prompt(text=script_content, speaker=self.speaker)
 
         self.eval()
         self.clear_kv_cache()
 
-        device = model.embed_tokens.weight.device
+        device = self.embed_tokens.weight.device
         gen = None
         if seed is not None:
             gen = torch.Generator(device="cpu").manual_seed(seed)
@@ -329,7 +396,7 @@ class Outetts(torch.nn.Module):
         step_ids = torch.tensor([prompt_ids], dtype=torch.long, device=device)
         new_tokens = []
 
-        for _ in range(max_length - len(prompt_ids)):
+        for _ in range(max_length):
             x = self.embed_tokens(step_ids)
             for i, layer in enumerate(self.layers):
                 x, self.kv_cache[i] = layer(x, self.kv_cache[i])
@@ -353,7 +420,7 @@ class Outetts(torch.nn.Module):
             seen[t] = True
             step_ids = torch.tensor([[t]], dtype=torch.long, device=device)
 
-        return new_tokens
+        return self.tok.extract_codes(new_tokens)
 
     def get_tensor(self, name):
 
