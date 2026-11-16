@@ -17,6 +17,7 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from starlette.websockets import WebSocketState
+from torch import device
 
 # Local Application Imports
 from backend.appDataBase.ApplicationSql import (
@@ -40,7 +41,8 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.download_manager = DownloadManager(str(app_data_path))
-    app.state.pipeline = TranslationPipeline(str(app_data_path))
+    app.state.pipeline = TranslationPipeline(
+        data_dir=str(app_data_path), device=device('cuda'))
     yield
     await app.state.download_manager.close()
     await app.state.pipeline.close()
@@ -48,7 +50,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="LinguSync",
-    description="Local video Dudding System.",
+    description="Local video Translation System.",
     version="1.0",
     lifespan=lifespan,
 )
@@ -342,7 +344,7 @@ async def remove_project(
 async def run_translation_pipeline(project_id: int, response: Response):
 
     # Use hardcoded input for integration testing.
-    input_audio_path = "/home/vishwjeet/Desktop/Projects/LinguSync/input_example_1.wav"
+    input_audio_path = "/home/vishwjeet/Downloads/wo_bhi_apne_na_huye_clip.mp3"
     project_dir = "/home/vishwjeet/Downloads/"
 
     translation_process = app.state.pipeline

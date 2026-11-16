@@ -280,6 +280,8 @@ def save_wav(path: str, audio, sample_rate: int = 24000):
         Sample rate of the output audio in Hz.
     """
 
+    full_path = os.path.join(path, "generated_audio.wav")
+
     a = (
         audio.detach().cpu().float().numpy()
         if torch.is_tensor(audio)
@@ -287,7 +289,7 @@ def save_wav(path: str, audio, sample_rate: int = 24000):
     )
     a = np.clip(a.reshape(-1), -1.0, 1.0)
     pcm = (a * 32767.0).astype("<i2")
-    with wave.open(path, "wb") as w:
+    with wave.open(full_path, "wb") as w:
         w.setnchannels(1)
         w.setsampwidth(2)
         w.setframerate(sample_rate)

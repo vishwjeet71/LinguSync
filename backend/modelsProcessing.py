@@ -1,11 +1,16 @@
 import json, uuid, os, asyncio, gc
-import logging, torch
+import logging
 from typing import Literal
+
+import torch
 
 from backend.models.stt.whisperSmall import WhisperSmall
 from backend.models.stt.whisperSmallProcessing import save_transcript
 from backend.models.mt.facebookNllb import FacebookNllb
 from backend.models.mt.facebookNllbProcessing import save_translation
+from backend.models.tts.outeTTS import Outetts
+from backend.models.tts.outeTTSProcessing import save_wav
+from backend.models.tts.speechCodeDecoder import load_decoder
 
 logger = logging.getLogger(__name__)
 
@@ -96,10 +101,11 @@ class TranslationPipeline:
             logger.error(f"Invalid Hardware configuration! {self.ht}")
             raise ValueError(f"Invalid Hardware configuration! {self.ht}")
 
-        self.translation_tasks[task_id]["current_working_task"] = "Speech-to-Text"
-
         try:
 
+            # Speech-to-text generation
+
+            self.translation_tasks[task_id]["current_working_task"] = "Speech-to-Text"
             self.translation_tasks[task_id]["status"] = "Loading STT Model..."
             self._call_whisper_small()
             logger.info(
@@ -123,6 +129,8 @@ class TranslationPipeline:
                     "error"
                 ] = "Unable to save transcription file."
             logger.info(f"Transcript save in {project_dir}")
+
+            # Machine Translation
 
             self.translation_tasks[task_id][
                 "current_working_task"
@@ -153,13 +161,50 @@ class TranslationPipeline:
                 self.translation_tasks[task_id][
                     "error"
                 ] = "Unable to save translation file."
-
             logger.info(f"Translation save in {project_dir}")
 
+            # Text-to-speech generation
+
+            self.translation_tasks[task_id]["current_working_task"] = "Text-to-Speech"
+            self.translation_tasks[task_id]["status"] = "Loading TTS Model..."
+            self._call_outeTTS()
+            logger.info(
+                f"OuteTTS loaded successfully on '{self.device.type}' and is ready for inference."
+            )
+
+            self.translation_tasks[task_id]["status"] = "Generating speech codes..."
+            speech_codes = self.model(
+                script_path=translation_saved_location  # Need to pass Speaker
+            )
+            self._clear_model_space()
+            logger.info("Audio code generated successfully!")
+
+            self.translation_tasks[task_id][
+                "current_working_task"
+            ] = "Speech Generation"
+            self.translation_tasks[task_id][
+                "status"
+            ] = "Loading audio decoding Model..."
+            self._call_audio_decoder()
+            logger.info(
+                f"Audio decoder loaded successfully on '{self.device.type}' and is ready for inference."
+            )
+
+            self.translation_tasks[task_id]["status"] = "Speech generation..."
+            save_wav(
+                path=project_dir,
+                audio=self.model(torch.tensor([speech_codes], device=self.device)),
+            )
+            self._clear_model_space()
+
+            logger.info("Audio generated successfully!")
+            self.translation_tasks[task_id]["status"] = "Completed"
+            self.translation_tasks[task_id]["current_working_task"] = "Done"
+
         except Exception as sttError:
-            logger.error(sttError)
+            logger.exception(sttError)
             self.translation_tasks[task_id]["status"] = "failed"
-            self.translation_tasks[task_id]["error"] = sttError
+            self.translation_tasks[task_id]["error"] = str(sttError)
             self._clear_model_space()
 
     def _clear_model_space(self):
@@ -212,6 +257,30 @@ class TranslationPipeline:
                 model_weight_path, map_location="cpu", mmap=True, weights_only=True
             ),
         ).to(self.device)
+
+    def _call_outeTTS(self):
+        config_path = os.path.join(self.OuteTTS, "config.json")
+        toknizer_path = os.path.join(self.OuteTTS, "tokenizer.json")
+        model_weight_path = os.path.join(self.OuteTTS, "model.safetensors")
+
+        for p in [config_path, toknizer_path, model_weight_path]:
+            if not os.path.exists(p):
+                logger.error(f"Path not Exist {p}")
+                raise FileNotFoundError(f"Unable to locate path {p}")
+
+        self.model = Outetts(
+            tokenizer_path=toknizer_path,
+            config=json.load(open(config_path)),
+            safetensor_files=[model_weight_path],
+        )
+
+    def _call_audio_decoder(self):
+        model_weights = os.path.join(self.OuteTTS, "decoder_model.pt")
+
+        if not os.path.exists(model_weights):
+            raise FileNotFoundError(f"Unable to locate path {model_weights}")
+
+        self.model = load_decoder(model_weights, self.device)
 
     async def close(self):
         logger.info("Shutting down Translation Pipeline...")
