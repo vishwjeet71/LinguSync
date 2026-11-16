@@ -1,12 +1,14 @@
 # The beta version is being developed using PyTorch.
 # In future versions, I'll replace PyTorch with lightweight libraries
 # to perform the required operations and reduce the final application size.
+import logging
 
 import torch
 from safetensors import safe_open
 
 from backend.models.tts.outeTTSProcessing import *
 
+logger = logging.getLogger(__name__)
 
 class OutettsAttention(torch.nn.Module):
     """OuteTTS attention module."""
@@ -294,10 +296,6 @@ class Outetts(torch.nn.Module):
     safetensor_files : list[str]
         List of paths to the model's weight files.
 
-    speaker_location : str
-        Path to the speaker profile containing the voice characteristics to use
-        for speech generation.
-
     NOTE The script language and the speaker's language must match.
 
     Returns
@@ -310,8 +308,7 @@ class Outetts(torch.nn.Module):
         self,
         tokenizer_path: str,
         config: dict,
-        safetensor_files: list[str],
-        speaker_location: str,
+        safetensor_files: list[str]
     ):
         super().__init__()
 
@@ -345,12 +342,11 @@ class Outetts(torch.nn.Module):
         )
         self.final_norm.weight.data.copy_(self.get_tensor("model.norm.weight"))
 
-        self.speaker = load_speaker(speaker_location)
-
     @torch.inference_mode()
     def forward(
         self,
         script_path: str,
+        speaker_location: str = "",
         max_length: int = 4096,
         temperature: float = 0.1,
         repetition_penalty: float = 1.1,
@@ -366,6 +362,10 @@ class Outetts(torch.nn.Module):
         ----------
         script_path : str
             Path to the text file containing the script in a supported language.
+        
+        speaker_location : str, default=None
+            Path to the speaker profile containing the voice characteristics to use
+            for speech generation.
 
         max_length : int, default=4096
             Maximum number of tokens the model can generate.
@@ -381,7 +381,11 @@ class Outetts(torch.nn.Module):
         if not script_content:
             raise ValueError(f"Invalid translation content received: {script_content}.")
 
-        prompt_ids = self.tok.encode_prompt(text=script_content, speaker=self.speaker)
+        speaker = load_speaker(speaker_location) if os.path.exists(speaker_location) else None
+        if not speaker:
+            logger.info(f"Unable to load speaker. Starting with the default speaker.")
+
+        prompt_ids = self.tok.encode_prompt(text=script_content, speaker=speaker)
 
         self.eval()
         self.clear_kv_cache()

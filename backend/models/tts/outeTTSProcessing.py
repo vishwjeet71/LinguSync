@@ -183,7 +183,7 @@ def build_prompt(text: str, speaker: dict | None = None) -> str:
     text : str
         Script to be converted into speech.
 
-    speaker : str
+    speaker : str, default=None
         Path to the speaker profile containing the voice characteristics
         to use for speech generation.
 
