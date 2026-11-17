@@ -38,6 +38,7 @@ export default function Translation({ Input_file }) {
                         <option value={"korean"}>Korean</option>
                     </select>
                 </div>
+                <h4>Please verify your selected languages before starting. Incorrect selections may result in unexpected translation output.</h4>
                 <button onClick={() => handleStartTranslatio({
                     portNumber, Input_file, sourceLang, targetedLang
 
