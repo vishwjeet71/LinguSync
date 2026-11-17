@@ -38,7 +38,8 @@
       "icons/icon.ico"
     ],
     "resources": {
-      "../src/assets/models_manifest.json": "models_manifest.json"
+      "../src/assets/models_manifest.json": "models_manifest.json",
+      "../src/assets/speakers/*": "speakers"
     }
   }
 }
