@@ -1,6 +1,7 @@
 import json, uuid, os, asyncio, gc
 import logging
 from typing import Literal
+from pathlib import Path
 
 import torch
 
@@ -11,6 +12,7 @@ from backend.models.mt.facebookNllbProcessing import save_translation
 from backend.models.tts.outeTTS import Outetts
 from backend.models.tts.outeTTSProcessing import save_wav
 from backend.models.tts.speechCodeDecoder import load_decoder
+from backend.appDataBase.ApplicationSql import add_sql_data
 
 logger = logging.getLogger(__name__)
 
@@ -58,16 +60,24 @@ class TranslationPipeline:
 
         self.model = None
 
-    async def create_task(self, input_audio_path: str = None, project_dir: str = None):
+    async def create_task(
+        self,
+        input_audio_path: str = None,
+        project_id: int = None,
+        project_name: str = None,
+    ):
 
         if not os.path.exists(input_audio_path):
             logger.error(f"Unable to locate the input path: {input_audio_path}")
             return None
 
+        project_dir = os.path.join(self.app_data_dir, "projects", project_name)
+        os.makedirs(project_dir, exist_ok=True)
+
         task_id = str(uuid.uuid4())
 
         task = asyncio.create_task(
-            self._run_pipeline(task_id, input_audio_path, project_dir)
+            self._run_pipeline(task_id, input_audio_path, project_id, project_dir)
         )
 
         task_details = {
@@ -87,6 +97,7 @@ class TranslationPipeline:
         self,
         task_id: str,
         input_audio_path: str,
+        project_id: int = None,
         project_dir: str = None,
         source_lang_token: str = "hin_Deva",
         target_lang_token: str = "eng_Latn",
@@ -130,6 +141,19 @@ class TranslationPipeline:
                 ] = "Unable to save transcription file."
             logger.info(f"Transcript save in {project_dir}")
 
+            # updating database for transcript
+            is_transcript_location_update = add_sql_data(
+                table_name="projects",
+                update=True,
+                row_id=project_id,
+                data={"stt_output": transcript_saved_location},
+            )
+            if not is_transcript_location_update:
+                logger.warning(
+                    "Failed to update transcription location in the database."
+                )
+            logger.info("Transcription location successfully saved to the database.")
+
             # Machine Translation
 
             self.translation_tasks[task_id][
@@ -163,6 +187,17 @@ class TranslationPipeline:
                 ] = "Unable to save translation file."
             logger.info(f"Translation save in {project_dir}")
 
+            # updating database for translation
+            is_translation_location_update = add_sql_data(
+                table_name="projects",
+                update=True,
+                row_id=project_id,
+                data={"trans_output": translation_saved_location},
+            )
+            if not is_translation_location_update:
+                logger.warning("Failed to update Translation location in the database.")
+            logger.info("Translation location successfully saved to the database.")
+
             # Text-to-speech generation
 
             self.translation_tasks[task_id]["current_working_task"] = "Text-to-Speech"
@@ -191,11 +226,26 @@ class TranslationPipeline:
             )
 
             self.translation_tasks[task_id]["status"] = "Speech generation..."
-            save_wav(
+            audio_saved_location = save_wav(
                 path=project_dir,
                 audio=self.model(torch.tensor([speech_codes], device=self.device)),
             )
             self._clear_model_space()
+
+            if audio_saved_location:
+
+                is_audio_location_update = add_sql_data(
+                    table_name="projects",
+                    update=True,
+                    row_id=project_id,
+                    data={
+                        "tts_output": translation_saved_location,
+                        "final_output": translation_saved_location,
+                    },
+                )
+                if not is_audio_location_update:
+                    logger.warning("Failed to update Audio location in the database.")
+                logger.info("Audio location successfully saved to the database.")
 
             logger.info("Audio generated successfully!")
             self.translation_tasks[task_id]["status"] = "Completed"
