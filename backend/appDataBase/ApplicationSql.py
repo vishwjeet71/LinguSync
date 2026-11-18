@@ -28,6 +28,10 @@ sql_path = f"sqlite:///{db_path}"
 sql_engine = create_engine(sql_path)
 
 
+class NotFoundError(Exception):
+    """Data not found in DataBased"""
+
+
 class Base(DeclarativeBase):
     pass
 
@@ -69,102 +73,60 @@ def add_sql_data(
     row_id: int = None,
     sql_engine: Engine = sql_engine,
     data: dict = None,
-    response: Response = None,
 ):
-    if response is None:
-        raise Exception("Response Object not provided!")
 
     # makeing Session
     Session = sessionmaker(bind=sql_engine)
     session = Session()
 
-    try:
-        if table_name == "projects":
+    if table_name == "projects":
 
-            if update:
+        if update:
 
-                if not row_id or not isinstance(row_id, int):
-                    response.status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
-                    return {
-                        "CM": f"Invalid or missing row ID: {row_id}",
-                        "UM": "Invalid data. Please provide a valid row ID.",
-                    }
+            if not row_id or not isinstance(row_id, int):
+                raise ValueError(f"Invalid or missing row ID: {row_id}")
 
-                row_to_update = (
-                    session.query(Projects)
-                    .filter(Projects.project_id == row_id)
-                    .first()
-                )
+            row_to_update = (
+                session.query(Projects).filter(Projects.project_id == row_id).first()
+            )
 
-                if row_to_update:
+            if row_to_update:
 
-                    for key, value in data.items():
-                        if hasattr(row_to_update, key):
-                            setattr(row_to_update, key, value)
+                for key, value in data.items():
+                    if hasattr(row_to_update, key):
+                        setattr(row_to_update, key, value)
 
-                    session.commit()
-                    return {
-                        "CM": "Data updated.",
-                        "UM": "Data updated successfully!",
-                    }
-
-                else:
-                    response.status_code = status.HTTP_404_NOT_FOUND
-                    return {
-                        "CM": f"Unable to locate row: {row_id}",
-                        "UM": "Data not found.",
-                    }
+                session.commit()
+                return True
 
             else:
-                try:
-                    new_data = Projects(
-                        project_name=data.get("project_name", None),
-                        created_at=data.get("created_at", "No data"),
-                        input_video=data.get("input_video", None),
-                        stt_output=data.get("stt_output", None),
-                        trans_output=data.get("trans_output", None),
-                        tts_output=data.get("tts_output", None),
-                        final_output=data.get("final_output", None),
-                    )
-
-                    session.add(new_data)
-                    session.commit()
-
-                    return {
-                        "CM": "Project created successfully.",
-                        "UM": "Project created successfully!",
-                    }
-
-                except Exception as projectCreationError:
-                    response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
-                    logging.error("Unable to created project!")
-                    return {
-                        "CM": f"Unable to create project: {projectCreationError}",
-                        "UM": "An unexpected error occurred while creating the project.",
-                    }
-
-        elif table_name == "models":
-
-            if update:
-                pass
-            else:
-                pass
+                raise NotFoundError(f"Unable to locate row: {row_id}")
 
         else:
-            response.status_code = status.HTTP_404_NOT_FOUND
-            logging.error("Invalid Table Name!")
-            return {
-                "CM": f"Unable to locate table: '{table_name}'",
-                "UM": "Unable to load data.",
-            }
+            new_data = Projects(
+                project_name=data.get("project_name", None),
+                created_at=data.get("created_at", "No data"),
+                input_video=data.get("input_video", None),
+                stt_output=data.get("stt_output", None),
+                trans_output=data.get("trans_output", None),
+                tts_output=data.get("tts_output", None),
+                final_output=data.get("final_output", None),
+            )
 
-    except Exception as mainBodyError:
-        response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
-        logging.error("Unable to perform opration on Data.")
-        return {
-            "CM": f"Operation failed: {mainBodyError}",
-            "UM": "Something went wrong. Please try again later.",
-        }
+            session.add(new_data)
+            session.commit()
+
+            return True
+
+    elif table_name == "models":
+
+        if update:
+            pass
+        else:
+            pass
+
+    else:
+        raise NotFoundError(f"Invalid table Name.")
 
 
 def load_data_from_sql(sql_engine: Engine = sql_engine, response: Response = None):

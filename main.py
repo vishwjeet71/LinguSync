@@ -27,6 +27,7 @@ from backend.appDataBase.ApplicationSql import (
     load_data_from_sql,
     remove_record,
     sql_path,
+    NotFoundError,
 )
 from backend.resourcesManagement import (
     DownloadManager,
@@ -42,7 +43,8 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     app.state.download_manager = DownloadManager(str(app_data_path))
     app.state.pipeline = TranslationPipeline(
-        data_dir=str(app_data_path), device=device('cuda'))
+        data_dir=str(app_data_path), device=device("cuda")
+    )
     yield
     await app.state.download_manager.close()
     await app.state.pipeline.close()
@@ -110,16 +112,22 @@ async def save_project(body: SaveProject, response: Response):
     now = datetime.now()
 
     try:
-        return add_sql_data(
+        result = add_sql_data(
             table_name="projects",
             data={
                 "project_name": body.project_name,
                 "created_at": now.strftime("On %Y-%m-%d at %H:%M"),
             },
-            response=response,
         )
 
+        if result:
+            return {
+                "CM": "Project created successfully.",
+                "UM": "Project created successfully!",
+            }
+
     except Exception as e:
+        logger.exception(e)
         response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
         return {
             "CM": f"Operation failed: {e}",
@@ -145,15 +153,38 @@ async def get_project_by_id(body: ProjectId, response: Response):
 async def update_project(body: ProjectUpdate, response: Response):
 
     try:
-        return add_sql_data(
+
+        result = add_sql_data(
             table_name="projects",
             update=True,
             row_id=body.project_id,
             data={"input_video": body.input_video},
-            response=response,
         )
 
+        if result:
+            return {
+                "CM": "Data updated.",
+                "UM": "Data updated successfully!",
+            }
+
+    except ValueError as e:
+        logger.exception(e)
+        response.status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
+        return {
+            "CM": f"Invalid or missing row ID: {body.project_id}",
+            "UM": "Invalid data. Please provide a valid row ID.",
+        }
+
+    except NotFoundError as DNF:
+        logger.exception(DNF)
+        response.status_code = status.HTTP_404_NOT_FOUND
+        return {
+            "CM": f"Unable to locate row: {body.project_id}",
+            "UM": "Data not found.",
+        }
+
     except Exception as e:
+        logger.exception(e)
         response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
         return {
             "CM": f"Failed to update project: {body.project_id}",
