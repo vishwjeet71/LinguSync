@@ -294,3 +294,6 @@ def save_wav(path: str, audio, sample_rate: int = 24000):
         w.setsampwidth(2)
         w.setframerate(sample_rate)
         w.writeframes(pcm.tobytes())
+
+
+    return full_path
