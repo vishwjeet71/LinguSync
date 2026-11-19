@@ -130,69 +130,42 @@ def add_sql_data(
         raise NotFoundError(f"Invalid table Name.")
 
 
-def load_data_from_sql(sql_engine: Engine = sql_engine, response: Response = None):
-
-    if response is None:
-        raise Exception("Response Object not provided!")
+def load_data_from_sql(sql_engine: Engine = sql_engine):
 
     tables = {"projects": None, "models": None}
 
-    try:
-        for table_name in tables.keys():
-            sql_query = f"SELECT * FROM {table_name}"
+    for table_name in tables.keys():
+        sql_query = f"SELECT * FROM {table_name}"
 
-            df = pd.read_sql_query(text(sql_query), con=sql_engine)
-            tables[table_name] = json.loads(df.to_json(orient="records"))
+        df = pd.read_sql_query(text(sql_query), con=sql_engine)
+        tables[table_name] = json.loads(df.to_json(orient="records"))
 
-        logging.info("Load data succesfully!")
-        return {
-            "CM": "Data loaded successfully.",
-            "UM": tables,
+    logging.info("Load data succesfully!")
+    return {
+        "CM": "Data loaded successfully.",
+        "UM": tables,
+    }
+
+
+def fetch_record(sql_engine: Engine = sql_engine, row_id: int = None):
+
+    Session = sessionmaker(bind=sql_engine)
+    session = Session()
+
+    row = session.query(Projects).filter(Projects.project_id == row_id).first()
+
+    if row:
+        data = {
+            column.name: getattr(row, column.name)
+            for column in Projects.__table__.columns
         }
 
-    except Exception as e:
-        response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
-        logging.error("Unable to load data:", e)
-        return {
-            "CM": f"Unable to load data: {e}",
-            "UM": "Unable to load Data!",
-        }
+        json.dumps(data, default=str)
 
+        return {"CM": f"Data loaded successfully for id: {row_id}", "UM": data}
 
-def fetch_record(
-    sql_engine: Engine = sql_engine, response: Response = None, row_id: int = None
-):
-    if response is None:
-        raise Exception("Response Object not provided!")
-
-    try:
-
-        Session = sessionmaker(bind=sql_engine)
-        session = Session()
-
-        row = session.query(Projects).filter(Projects.project_id == row_id).first()
-
-        if row:
-            data = {
-                column.name: getattr(row, column.name)
-                for column in Projects.__table__.columns
-            }
-
-            json.dumps(data, default=str)
-
-            return {"CM": f"Data loaded successfully for id: {row_id}", "UM": data}
-
-        else:
-            response.status_code = status.HTTP_404_NOT_FOUND
-            return {"CM": f"No data found for id: {row_id}", "UM": "No data found."}
-
-    except Exception as e:
-        response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
-
-        return {
-            "CM": f"Failed to load data for id: {row_id}: {e}",
-            "UM": "Failed to load data.",
-        }
+    else:
+        raise ValueError(f"Data not found for Id: {row_id}")
 
 
 def remove_record(

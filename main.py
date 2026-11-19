@@ -88,7 +88,6 @@ class Resources(BaseModel):
 class PipelineInput(BaseModel):
     project_id: int
     input_audio_path: str
-    project_name: str
     source_language: str
     target_language: str
 
@@ -107,9 +106,10 @@ async def get_paths():
 async def get_data(response: Response):
 
     try:
-        return load_data_from_sql(response=response)
+        return load_data_from_sql()
 
     except Exception as e:
+        logger.exception(e)
         response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
         return {"CM": f"Unable to load data: {e}", "UM": "Unable to load Data!"}
 
@@ -147,9 +147,18 @@ async def save_project(body: SaveProject, response: Response):
 async def get_project_by_id(body: ProjectId, response: Response):
 
     try:
-        return fetch_record(row_id=body.project_id, response=response)
+        return fetch_record(row_id=body.project_id)
+
+    except ValueError as e:
+        logger.exception(e)
+        response.status_code = status.HTTP_404_NOT_FOUND
+        return {
+            "CM": f"No data found for id: {body.project_id}",
+            "UM": "No data found.",
+        }
 
     except Exception as e:
+        logger.exception(e)
         response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
         return {
             "CM": f"Failed to load data for id: {body.project_id}: {e}",
@@ -384,11 +393,13 @@ async def run_translation_pipeline(body: PipelineInput, response: Response):
 
     try:
 
+        project_name = None  # NOTE Implement after refactoring the database code.
+
         translation_process = app.state.pipeline
         task_id = await translation_process.create_task(
             project_id=body.project_id,
             input_audio_path=body.input_audio_path,
-            project_name=body.project_name,
+            project_name=project_name,
             source_language=body.source_language,
             target_language=body.target_language,
         )
