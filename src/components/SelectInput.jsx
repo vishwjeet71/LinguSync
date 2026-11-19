@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 // component
-import Translation from "./TranslationPipeline";
+import { Translation } from "./TranslationPipeline";
 
 export default function SelectInput({ portNumber, project_id, Input_file, setDisplayMessage, setRefTrigger, setIsUpdate }) {
 
@@ -25,8 +25,8 @@ export default function SelectInput({ portNumber, project_id, Input_file, setDis
                 directory: false,
                 filters: [
                     {
-                        name: "Videos",
-                        extensions: ["mp4", "mkv"],
+                        name: "Media Files",
+                        extensions: ["mp4", "mkv", "mp3", "wav", "flac"],
                     }
                 ],
             });
@@ -96,7 +96,7 @@ export default function SelectInput({ portNumber, project_id, Input_file, setDis
             )}
 
             <p>Input Video: {Input_file || "Not selected"}</p>
-            <Translation Input_file={Input_file}/>
+            <Translation Input_file={Input_file} />
             <button onClick={() => setUpdateProcessMenager("wantUpdate")}>
                 {Input_file ? "Update File" : "Select File"}
             </button>
