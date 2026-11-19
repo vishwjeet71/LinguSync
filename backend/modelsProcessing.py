@@ -65,6 +65,8 @@ class TranslationPipeline:
         input_audio_path: str = None,
         project_id: int = None,
         project_name: str = None,
+        source_language: str = None,
+        target_language: str = None
     ):
 
         if not os.path.exists(input_audio_path):

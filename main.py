@@ -85,6 +85,14 @@ class Resources(BaseModel):
     file_name: str
 
 
+class PipelineInput(BaseModel):
+    project_id: int
+    input_audio_path: str
+    project_name: str
+    source_language: str
+    target_language: str
+
+
 @app.get("/lingusync")
 async def get_health():
     return {"status": "ok"}
@@ -372,17 +380,50 @@ async def remove_project(
 
 
 @app.post("/translate/{project_id}")
-async def run_translation_pipeline(project_id: int, response: Response):
+async def run_translation_pipeline(body: PipelineInput, response: Response):
 
-    # Use hardcoded input for integration testing.
-    input_audio_path = "/home/vishwjeet/Downloads/wo_bhi_apne_na_huye_clip.mp3"
-    project_dir = "/home/vishwjeet/Downloads/"
+    try:
 
-    translation_process = app.state.pipeline
+        translation_process = app.state.pipeline
+        task_id = await translation_process.create_task(
+            project_id=body.project_id,
+            input_audio_path=body.input_audio_path,
+            project_name=body.project_name,
+            source_language=body.source_language,
+            target_language=body.target_language,
+        )
 
-    task_id = await translation_process.create_task(input_audio_path, project_dir)
+        result = add_sql_data(
+            table_name="projects",
+            update=True,
+            row_id=body.project_id,
+            data={"processing_id": task_id},
+        )
 
-    return task_id
+        if not result:
+            raise ValueError("Unable to save the task ID to the project database.")
+
+        return {
+            "CM": f"Translation task created successfully with ID: '{task_id}'",
+            "UM": "Translation started successfully.",
+        }
+
+    except ValueError as e:
+        translation_process.cancle_task(task_id)
+        logger.exception(e)
+        response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        return {
+            "CM": "Could not save the task ID to the database.",
+            "UM": "Something went wrong while saving the data.",
+        }
+
+    except Exception as e:
+        logger.exception(e)
+        response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        return {
+            "CM": f"Something went wrong while creating the translation task. {str(e)}",
+            "UM": "Unable to create the task at this moment.",
+        }
 
 
 @app.post("/translate/task/get/{task_id}")
