@@ -42,6 +42,7 @@ class Projects(Base):
     project_id: Mapped[int] = mapped_column(primary_key=True)
     project_name: Mapped[str] = mapped_column(String(100), unique=True)
     created_at: Mapped[str] = mapped_column(String(20), unique=True)
+    processing_id: Mapped[str] = mapped_column(String(100), unique=True, nullable=True)
     input_video: Mapped[str] = mapped_column(String(100), nullable=True)
     stt_output: Mapped[str] = mapped_column(String(100), nullable=True)
     trans_output: Mapped[str] = mapped_column(String(100), nullable=True)
