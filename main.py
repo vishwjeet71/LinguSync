@@ -388,16 +388,16 @@ async def remove_project(
     return remove_record(row_id=projectId, response=response)
 
 
-@app.post("/translate/{project_id}")
+@app.post("/translate/project")
 async def run_translation_pipeline(body: PipelineInput, response: Response):
 
     try:
 
-        project_name = None  # NOTE Implement after refactoring the database code.
+        project_name = fetch_record(row_id=body.project_id)["UM"]["project_name"]
 
         translation_process = app.state.pipeline
         task_id = await translation_process.create_task(
-            project_id=body.project_id,
+            project_id=int(body.project_id),
             input_audio_path=body.input_audio_path,
             project_name=project_name,
             source_language=body.source_language,
@@ -444,7 +444,7 @@ async def task_details(task_id: str, response: Response):
     return translation_process.get_task_details(task_id)
 
 
-@app.post("/translate/task/cancle/{task_id}")
+@app.post("/translate/task/cancel/{task_id}")
 async def stop_translation(task_id: str, response: Response):
     translation_process = app.state.pipeline
 

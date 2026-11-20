@@ -44,6 +44,10 @@ class TranslationPipeline:
         self.sys_models_dir = os.path.join(data_dir, "models")
 
         self.translation_tasks = {}
+        self.model = None
+
+        # Prevent concurrent pipelines from using the shared model.
+        self._pipeline_lock = asyncio.Lock()
 
         if not os.path.exists(self.sys_models_dir):
             raise FileNotFoundError(
@@ -58,7 +62,22 @@ class TranslationPipeline:
         self.nllb_dir = os.path.join(self.sys_models_dir, "nllb-200-1.3B")
         self.OuteTTS = os.path.join(self.sys_models_dir, "OuteTTS-0.2-500M")
 
-        self.model = None
+    async def _run_blocking(self, func, *args, **kwargs):
+
+        worker = asyncio.create_task(asyncio.to_thread(func, *args, **kwargs))
+
+        try:
+            return await asyncio.shield(worker)
+        except asyncio.CancelledError:
+
+            # The thread cannot be forcefully stopped.
+            # Wait until the current operation safely finishes.
+            try:
+                await asyncio.shield(worker)
+            except Exception:
+                pass
+
+            raise
 
     async def create_task(
         self,
@@ -66,32 +85,34 @@ class TranslationPipeline:
         project_id: int = None,
         project_name: str = None,
         source_language: str = None,
-        target_language: str = None
+        target_language: str = None,
     ):
 
-        if not os.path.exists(input_audio_path):
-            logger.error(f"Unable to locate the input path: {input_audio_path}")
-            return None
+        if not input_audio_path or not os.path.exists(input_audio_path):
+            raise FileNotFoundError(f"Unable to locate input audio: {input_audio_path}")
 
         project_dir = os.path.join(self.app_data_dir, "projects", project_name)
         os.makedirs(project_dir, exist_ok=True)
 
         task_id = str(uuid.uuid4())
 
-        task = asyncio.create_task(
-            self._run_pipeline(task_id, input_audio_path, project_id, project_dir)
-        )
-
         task_details = {
             "id": task_id,
             "hardware": self.ht,
             "current_working_task": None,  # stt, mt, tts, done
-            "status": "idel",
-            "task": task,
+            "status": "queued",
+            "task": None,
             "error": None,
         }
 
         self.translation_tasks[task_id] = task_details
+
+        task = asyncio.create_task(
+            self._run_pipeline(task_id, input_audio_path, project_id, project_dir),
+            name=f"translation-{task_id}",
+        )
+
+        task_details["task"] = task
 
         return task_id
 
@@ -105,175 +126,217 @@ class TranslationPipeline:
         target_lang_token: str = "eng_Latn",
     ):
 
-        if self.ht == "p":
-            logger.info(
-                "Performance model integration is not supported yet. Falling back to the efficient model."
-            )
-
-        if self.ht not in ("e", "p"):
-            logger.error(f"Invalid Hardware configuration! {self.ht}")
-            raise ValueError(f"Invalid Hardware configuration! {self.ht}")
+        task_info = self.translation_tasks[task_id]
 
         try:
 
-            # Speech-to-text generation
+            # Only one pipeline can use the shared model at a time.
+            async with self._pipeline_lock:
 
-            self.translation_tasks[task_id]["current_working_task"] = "Speech-to-Text"
-            self.translation_tasks[task_id]["status"] = "Loading STT Model..."
-            self._call_whisper_small()
-            logger.info(
-                f"Whisper model loaded successfully on '{self.device.type}' and is ready for inference."
-            )
+                self._check_cancelled()
 
-            self.translation_tasks[task_id]["status"] = "Extracting Transcript..."
-            transcript_saved_location = save_transcript(
-                script=self.model(audio_path=input_audio_path, device=self.device),
-                save_dir=project_dir,
-            )
-            self._clear_model_space()
+                if self.ht == "p":
+                    logger.info(
+                        "Performance model integration is not supported yet. Falling back to the efficient model."
+                    )
 
-            if not transcript_saved_location:
-                logger.error(
-                    f"Unable to save the transcipt in project dir {project_dir}"
-                )  # Stop task execution; no further processing will be performed.
+                # STT
+                task_info["current_working_task"] = "Speech-to-Text"
+                task_info["status"] = "Loading STT Model..."
 
-                self.translation_tasks[task_id]["status"] = "failed"
-                self.translation_tasks[task_id][
-                    "error"
-                ] = "Unable to save transcription file."
-            logger.info(f"Transcript save in {project_dir}")
+                await self._run_blocking(self._call_whisper_small)
+                self._check_cancelled()
 
-            # updating database for transcript
-            is_transcript_location_update = add_sql_data(
-                table_name="projects",
-                update=True,
-                row_id=project_id,
-                data={"stt_output": transcript_saved_location},
-            )
-            if not is_transcript_location_update:
-                logger.warning(
-                    "Failed to update transcription location in the database."
+                task_info["status"] = "Extracting Transcript..."
+                transcript = await self._run_blocking(
+                    self.model,
+                    audio_path=input_audio_path,
+                    device=self.device,
                 )
-            logger.info("Transcription location successfully saved to the database.")
+                transcript_saved_location = await self._run_blocking(
+                    save_transcript,
+                    script=transcript,
+                    save_dir=project_dir,
+                )
 
-            # Machine Translation
+                await self._clear_model_space()
+                self._check_cancelled()
 
-            self.translation_tasks[task_id][
-                "current_working_task"
-            ] = "Machine-Translaton"
-            self.translation_tasks[task_id]["status"] = "Loading MT Model..."
-            self._call_meta_nllb()
-            logger.info(
-                f"Meta-Nllb model loaded successfully on '{self.device.type}' and is ready for inference."
-            )
+                if not transcript_saved_location:
+                    raise RuntimeError("Unable to save transcription file.")
 
-            self.translation_tasks[task_id]["status"] = "Translating Transcript..."
-            translation_saved_location = save_translation(
-                translation=self.model(
+                await self._run_blocking(
+                    add_sql_data,
+                    table_name="projects",
+                    update=True,
+                    row_id=project_id,
+                    data={"stt_output": transcript_saved_location},
+                )
+
+                # MT
+                task_info["current_working_task"] = "Machine Translation"
+                task_info["status"] = "Loading MT Model..."
+
+                await self._run_blocking(self._call_meta_nllb)
+                self._check_cancelled()
+
+                task_info["status"] = "Translating Transcript..."
+                translation = await self._run_blocking(
+                    self.model,
                     source_txt=transcript_saved_location,
                     source_lang_token=source_lang_token,
                     target_lang_token=target_lang_token,
                     device=self.device,
-                ),
-                save_dir=project_dir,
-            )
-            self._clear_model_space()
-
-            if not translation_saved_location:
-                logger.error(
-                    f"Unable to save the translation in project dir {project_dir}"
                 )
-                self.translation_tasks[task_id]["status"] = "failed"
-                self.translation_tasks[task_id][
-                    "error"
-                ] = "Unable to save translation file."
-            logger.info(f"Translation save in {project_dir}")
+                translation_saved_location = await self._run_blocking(
+                    save_translation,
+                    translation=translation,
+                    save_dir=project_dir,
+                )
 
-            # updating database for translation
-            is_translation_location_update = add_sql_data(
-                table_name="projects",
-                update=True,
-                row_id=project_id,
-                data={"trans_output": translation_saved_location},
-            )
-            if not is_translation_location_update:
-                logger.warning("Failed to update Translation location in the database.")
-            logger.info("Translation location successfully saved to the database.")
+                await self._clear_model_space()
+                self._check_cancelled()
 
-            # Text-to-speech generation
+                if not translation_saved_location:
+                    raise RuntimeError("Unable to save translation file.")
 
-            self.translation_tasks[task_id]["current_working_task"] = "Text-to-Speech"
-            self.translation_tasks[task_id]["status"] = "Loading TTS Model..."
-            self._call_outeTTS()
-            logger.info(
-                f"OuteTTS loaded successfully on '{self.device.type}' and is ready for inference."
-            )
+                await self._run_blocking(
+                    add_sql_data,
+                    table_name="projects",
+                    update=True,
+                    row_id=project_id,
+                    data={"trans_output": translation_saved_location},
+                )
 
-            self.translation_tasks[task_id]["status"] = "Generating speech codes..."
-            speech_codes = self.model(
-                script_path=translation_saved_location  # Need to pass Speaker
-            )
-            self._clear_model_space()
-            logger.info("Audio code generated successfully!")
+                # TTS
+                task_info["current_working_task"] = "Text-to-Speech"
+                task_info["status"] = "Loading TTS Model..."
 
-            self.translation_tasks[task_id][
-                "current_working_task"
-            ] = "Speech Generation"
-            self.translation_tasks[task_id][
-                "status"
-            ] = "Loading audio decoding Model..."
-            self._call_audio_decoder()
-            logger.info(
-                f"Audio decoder loaded successfully on '{self.device.type}' and is ready for inference."
-            )
+                await self._run_blocking(self._call_outeTTS)
+                self._check_cancelled()
 
-            self.translation_tasks[task_id]["status"] = "Speech generation..."
-            audio_saved_location = save_wav(
-                path=project_dir,
-                audio=self.model(torch.tensor([speech_codes], device=self.device)),
-            )
-            self._clear_model_space()
+                task_info["status"] = "Generating speech codes..."
+                speech_codes = await self._run_blocking(
+                    self.model,
+                    script_path=translation_saved_location,
+                )
 
-            if audio_saved_location:
+                await self._clear_model_space()
+                self._check_cancelled()
 
-                is_audio_location_update = add_sql_data(
+                # AUDIO DECODER
+                task_info["current_working_task"] = "Speech Generation"
+                task_info["status"] = "Loading Audio Decoder..."
+
+                await self._run_blocking(self._call_audio_decoder)
+                self._check_cancelled()
+
+                task_info["status"] = "Generating audio..."
+                audio = torch.tensor(
+                    [speech_codes],
+                    device=self.device,
+                )
+                audio_result = await self._run_blocking(
+                    self.model,
+                    audio,
+                )
+
+                audio_saved_location = await self._run_blocking(
+                    save_wav,
+                    path=project_dir,
+                    audio=audio_result,
+                )
+
+                await self._clear_model_space()
+                self._check_cancelled()
+
+                if not audio_saved_location:
+                    raise RuntimeError("Unable to save generated audio.")
+
+                await self._run_blocking(
+                    add_sql_data,
                     table_name="projects",
                     update=True,
                     row_id=project_id,
                     data={
-                        "tts_output": translation_saved_location,
-                        "final_output": translation_saved_location,
+                        "tts_output": audio_saved_location,
+                        "final_output": audio_saved_location,
                     },
                 )
-                if not is_audio_location_update:
-                    logger.warning("Failed to update Audio location in the database.")
-                logger.info("Audio location successfully saved to the database.")
 
-            logger.info("Audio generated successfully!")
-            self.translation_tasks[task_id]["status"] = "Completed"
-            self.translation_tasks[task_id]["current_working_task"] = "Done"
+                task_info["status"] = "Completed"
+                task_info["current_working_task"] = "Done"
 
-        except Exception as sttError:
-            logger.exception(sttError)
-            self.translation_tasks[task_id]["status"] = "failed"
-            self.translation_tasks[task_id]["error"] = str(sttError)
-            self._clear_model_space()
+                logger.info(
+                    "Translation pipeline completed: %s",
+                    task_id,
+                )
 
-    def _clear_model_space(self):
+        except asyncio.CancelledError:
+
+            task_info["status"] = "cancelled"
+            task_info["error"] = "Task cancelled by user."
+
+            logger.info("Pipeline cancelled: %s", task_id)
+            raise
+
+        except Exception as error:
+
+            task_info["status"] = "failed"
+            task_info["error"] = str(error)
+
+            logger.exception(
+                "Pipeline failed: %s",
+                task_id,
+            )
+        finally:
+            await self._clear_model_space()
+
+    def _check_cancelled(self):
+
+        current_task = asyncio.current_task()
+
+        if current_task and current_task.cancelling():
+            raise asyncio.CancelledError
+
+    async def _clear_model_space(self):
+
+        model = self.model
+        self.model = None
+
+        if model is not None:
+            del model
 
         if self.device.type == "cuda":
-            torch.cuda.empty_cache()
+            await self._run_blocking(torch.cuda.empty_cache)
 
-        del self.model
-        self.model = None
-        gc.collect()
+        await self._run_blocking(gc.collect)
 
-    async def cancle_task(self, task_id: str):
-        logger.warning("Task cancellation functionality has not been implemented yet.")
-        return None
+    async def cancel_task(self, task_id: str):
 
-    def get_task_details(self, task_id):
-        return self.translation_tasks.get(task_id)
+        task_info = self.translation_tasks.get(task_id)
+        if not task_info:
+            return False
+
+        task = task_info.get("task")
+        if not task or task.done():
+            return False
+
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+        return True
+
+    def get_task_details(self, task_id: str):
+
+        task_info = self.translation_tasks.get(task_id)
+        if not task_info:
+            return None
+
+        return {key: value for key, value in task_info.items() if key != "task"}
 
     def _call_whisper_small(self):
 
