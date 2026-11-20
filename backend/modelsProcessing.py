@@ -99,6 +99,7 @@ class TranslationPipeline:
         task_details = {
             "id": task_id,
             "hardware": self.ht,
+            "inference_type": self.device.type,
             "current_working_task": None,  # stt, mt, tts, done
             "status": "queued",
             "task": None,
@@ -291,6 +292,21 @@ class TranslationPipeline:
             )
         finally:
             await self._clear_model_space()
+
+            if project_id is not None:
+                try:
+                    await self._run_blocking(
+                        add_sql_data,
+                        table_name="projects",
+                        update=True,
+                        row_id=project_id,
+                        data={"processing_id": None},
+                    )
+                except Exception:
+                    logger.exception(
+                        "Failed to reset processing_id for project %s",
+                        project_id,
+                    )
 
     def _check_cancelled(self):
 
