@@ -96,7 +96,7 @@ export default function SelectInput({ portNumber, project_id, Input_file, setDis
             )}
 
             <p>Input Video: {Input_file || "Not selected"}</p>
-            <Translation Input_file={Input_file} />
+            <Translation Input_file={Input_file} project_id={project_id} setRefTrigger={setRefTrigger}/>
             <button onClick={() => setUpdateProcessMenager("wantUpdate")}>
                 {Input_file ? "Update File" : "Select File"}
             </button>

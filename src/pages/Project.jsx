@@ -6,6 +6,7 @@ import { useProjectContext } from "../App";
 
 // Component
 import SelectInput from "../components/SelectInput";
+import { TrackTranslationProcess } from "../components/TranslationPipeline";
 
 export default function Project() {
 
@@ -79,7 +80,6 @@ export default function Project() {
                 <h2>Project Name: {projectData.project_name || "unnamed project"} </h2>
                 <h3>Created: {projectData.created_at || ""}</h3>
             </div>
-
             <div>
                 <SelectInput
                     portNumber={portNumber}
@@ -87,6 +87,12 @@ export default function Project() {
                     Input_file={projectData.input_video}
                     setDisplayMessage={setDisplayMessage}
                     setRefTrigger={setRefTrigger} />
+            </div>
+            <div>
+                {projectData.processing_id ? <TrackTranslationProcess
+                processing_id={projectData.processing_id}
+                portNumber={portNumber}
+                setDisplayMessage={setDisplayMessage}/> : null}
             </div>
         </div>
     );

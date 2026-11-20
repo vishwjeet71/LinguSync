@@ -437,15 +437,63 @@ async def run_translation_pipeline(body: PipelineInput, response: Response):
         }
 
 
-@app.post("/translate/task/get/{task_id}")
-async def task_details(task_id: str, response: Response):
-    translation_process = app.state.pipeline
+@app.websocket("/translate/task/get/{task_id}")
+async def task_details(websocket: WebSocket, task_id: str):
 
-    return translation_process.get_task_details(task_id)
+    await websocket.accept()
+
+    pipeline = app.state.pipeline
+
+    try:
+        while True:
+            task_data = pipeline.get_task_details(task_id)
+
+            if task_data is None:
+                await websocket.send_json({
+                    "status": "not_found",
+                    "error": "Task not found",
+                })
+                break
+
+            await websocket.send_json(task_data)
+
+            if task_data.get("status") in (
+                "Completed",
+                "failed",
+                "cancelled",
+            ):
+                break
+
+            await asyncio.sleep(0.5)
+
+    except WebSocketDisconnect:
+        pass
+
+    except RuntimeError as e:
+        logger.debug(f"WebSocket closed: {e}")
+
+    finally:
+        if websocket.application_state == WebSocketState.CONNECTED:
+            try:
+                await websocket.close()
+            except RuntimeError:
+                pass
 
 
 @app.post("/translate/task/cancel/{task_id}")
-async def stop_translation(task_id: str, response: Response):
+async def cancel_task(task_id: str, response: Response):
     translation_process = app.state.pipeline
 
-    return translation_process.cancle_task(task_id)
+    result = await translation_process.cancel_task(task_id)
+
+    if result:
+        return {
+            "CM": f"Translation task '{task_id}' cancelled successfully.",
+            "UM": "Translation cancelled successfully."
+        }
+
+    response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+    return {
+        "CM": f"Unable to cancel task '{task_id}'. Task not found or already finished.",
+        "UM": "Unable to cancel translation."
+    }
