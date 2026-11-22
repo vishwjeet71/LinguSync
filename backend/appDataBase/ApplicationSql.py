@@ -168,12 +168,7 @@ def fetch_record(sql_engine: Engine = sql_engine, row_id: int = None):
         raise ValueError(f"Data not found for Id: {row_id}")
 
 
-def remove_record(
-    sql_engine: Engine = sql_engine, row_id: int = None, response: Response = None
-):
-
-    if response is None:
-        raise Exception("Response Object not provided!")
+def remove_record(sql_engine: Engine = sql_engine, row_id: int = None):
 
     Session = sessionmaker(bind=sql_engine)
 
@@ -184,18 +179,8 @@ def remove_record(
             session.commit()
 
             if result.rowcount > 0:
-                return {
-                    "CM": f"Data deleted successfully for id: {row_id}",
-                    "UM": "Project removed successfully",
-                }
-            else:
-                response.status_code = status.HTTP_404_NOT_FOUND
-                return {"CM": f"No data found for id: {row_id}", "UM": "No data found."}
+                return True
 
-        except Exception as e:
+        except Exception:
             session.rollback()
-            response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
-            return {
-                "CM": f"Failed to delete data for id: {row_id}: {e}",
-                "UM": "Failed to remove data.",
-            }
+            raise

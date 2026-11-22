@@ -5,6 +5,7 @@ import os
 import gc
 from contextlib import asynccontextmanager, suppress
 from datetime import datetime
+import shutil
 
 # Third-party Libraries
 from fastapi import (
@@ -381,11 +382,43 @@ async def get_active_downloads():
 
 
 @app.delete("/remove/{projectId}")
-async def remove_project(
-    projectId: int, response: Response
-):  # Initial Project Cleanup Logic
-    # Remove all temporary data generated during input processing.
-    return remove_record(row_id=projectId, response=response)
+async def remove_project(projectId: int, response: Response):
+
+    try:
+
+        project_data = fetch_record(row_id=projectId)["UM"]
+
+        if not isinstance(project_data, dict):
+            raise NotFoundError(f"Project not found with ID: {projectId}")
+
+        project_name = project_data.get("project_name", None)
+        if not project_name:
+            raise ValueError(f"Invalid Project name: {project_name}")
+
+        project_location = os.path.join(app_data_path, "projects", project_name)
+        shutil.rmtree(project_location)
+        logger.info(f"{project_name} Data was removed form device.")
+
+        opration_result = remove_record(row_id=projectId)
+
+        if not opration_result:
+            return {
+                "CM": "Failed to remove project data from the database.",
+                "UM": "Please try again later.",
+            }
+
+        return {
+            "CM": f"Data deleted successfully for id: {projectId}",
+            "UM": "Project removed successfully",
+        }
+
+    except Exception as e:
+        logger.exception(e)
+        response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        return {
+            "CM": f"Failed to delete data for id: {projectId}: {str(e)}",
+            "UM": "Failed to remove data.",
+        }
 
 
 @app.post("/translate/project")
@@ -449,10 +482,12 @@ async def task_details(websocket: WebSocket, task_id: str):
             task_data = pipeline.get_task_details(task_id)
 
             if task_data is None:
-                await websocket.send_json({
-                    "status": "not_found",
-                    "error": "Task not found",
-                })
+                await websocket.send_json(
+                    {
+                        "status": "not_found",
+                        "error": "Task not found",
+                    }
+                )
                 break
 
             await websocket.send_json(task_data)
@@ -489,11 +524,11 @@ async def cancel_task(task_id: str, response: Response):
     if result:
         return {
             "CM": f"Translation task '{task_id}' cancelled successfully.",
-            "UM": "Translation cancelled successfully."
+            "UM": "Translation cancelled successfully.",
         }
 
     response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
     return {
         "CM": f"Unable to cancel task '{task_id}'. Task not found or already finished.",
-        "UM": "Unable to cancel translation."
+        "UM": "Unable to cancel translation.",
     }
