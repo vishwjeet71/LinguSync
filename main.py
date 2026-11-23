@@ -176,7 +176,13 @@ async def update_project(body: ProjectUpdate, response: Response):
             table_name="projects",
             update=True,
             row_id=body.project_id,
-            data={"input_video": body.input_video},
+            data={
+                "input_video": body.input_video,
+                "stt_output": None,
+                "trans_output": None,
+                "tts_output": None,
+                "final_output": None,
+            },
         )
 
         if result:
