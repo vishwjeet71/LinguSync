@@ -19,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from starlette.websockets import WebSocketState
 from torch import device
+import av
 
 # Local Application Imports
 from backend.appDataBase.ApplicationSql import (
@@ -430,14 +431,43 @@ async def remove_project(projectId: int, response: Response):
 @app.post("/translate/project")
 async def run_translation_pipeline(body: PipelineInput, response: Response):
 
+    allow_video_format = {"mkv", "mp4"}
+    input_audio_path = body.input_audio_path
+
     try:
 
-        project_name = fetch_record(row_id=body.project_id)["UM"]["project_name"]
+        project_data = fetch_record(row_id=body.project_id)["UM"]
+        input_path = project_data["input_video"]
+        project_name = project_data["project_name"]
+
+        is_video = (
+            True if input_path.strip().split(".")[-1] in allow_video_format else False
+        )
+
+        if is_video:
+            input_audio_path = os.path.join(
+                app_data_path, "projects", project_name, "extracted_audio.wav"
+            )
+
+            container = av.open(input_path)
+            audio = container.streams.audio[0]
+
+            with av.open(input_audio_path, mode="w") as output:
+                stream = output.add_stream("pcm_s16le", rate=audio.rate)
+
+                for frame in container.decode(audio):
+                    for packet in stream.encode(frame):
+                        output.mux(packet)
+
+                for packet in stream.encode():
+                    output.mux(packet)
+
+            container.close()
 
         translation_process = app.state.pipeline
         task_id = await translation_process.create_task(
             project_id=int(body.project_id),
-            input_audio_path=body.input_audio_path,
+            input_audio_path=input_audio_path,
             project_name=project_name,
             source_language=body.source_language,
             target_language=body.target_language,
