@@ -446,14 +446,16 @@ async def run_translation_pipeline(body: PipelineInput, response: Response):
 
         if is_video:
             input_audio_path = os.path.join(
-                app_data_path, "projects", project_name, "extracted_audio.wav"
+                app_data_path, "projects", project_name, "extracted_audio.mp3"
             )
 
             container = av.open(input_path)
             audio = container.streams.audio[0]
 
             with av.open(input_audio_path, mode="w") as output:
-                stream = output.add_stream("pcm_s16le", rate=audio.rate)
+                stream = output.add_stream("libmp3lame", rate=audio.rate)
+
+                stream.bit_rate = 192000  # Approximate target for VBR quality 2
 
                 for frame in container.decode(audio):
                     for packet in stream.encode(frame):
