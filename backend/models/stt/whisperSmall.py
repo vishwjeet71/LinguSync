@@ -9,6 +9,10 @@ from tokenizers import Tokenizer
 from backend.models.stt.whisperSmallProcessing import *
 
 
+class OutofPosEncoding(Exception):
+    """Error For When model reach PoseEncoding"""
+    pass
+
 class WhisperEncoderAttention(torch.nn.Module):
     def __init__(self, config: dict, layer_no: int, safetensor_files: list):
         super().__init__()
@@ -617,6 +621,9 @@ class WhisperDecoder(torch.nn.Module):
             position = torch.tensor([self.current_pos], device=x.device)
             x = x + self.embed_positions(position)
             self.current_pos += 1
+
+        if self.current_pos >= 448:
+            raise OutofPosEncoding("Model run out PosEncoding")
 
         for i, layer in enumerate(self.layers):
             x, self.masked_attn_kv[i], self.cross_attn_kv[i] = layer(
