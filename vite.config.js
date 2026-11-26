@@ -18,14 +18,18 @@ export default defineConfig(() => ({
     host: host || "127.0.0.1",
     hmr: host
       ? {
-          protocol: "ws",
-          host,
-          port: 1421,
-        }
+        protocol: "ws",
+        host,
+        port: 1421,
+      }
       : undefined,
     watch: {
       // 3. tell Vite to ignore watching `src-tauri`
-      ignored: ["**/src-tauri/**"],
+      ignored: [
+        "**/src-tauri/**",
+        '**/.venv/**',
+        '**/node_modules/**',
+        '**/src-tauri/target/**',],
     },
   },
 }));
